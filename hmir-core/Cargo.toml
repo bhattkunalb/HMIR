@@ -4,7 +4,17 @@ version = "0.1.0"
 edition = "2021"
 description = "Core memory and orchestration logic for the Heterogeneous Memory-First Inference Runtime"
 
+[features]
+default = []
+battery-aware = []
+
 [dependencies]
+thiserror = "1.0"
+tracing = "0.1"
+dashmap = "5.5"
+fastrand = "2.0"
+tokio = { version = "1.28", features = ["full", "rt-multi-thread"] }
+
 # num_cpus = "1.15.0"
 # hwloc2 = "2.2"   # Simulating for now
 # bytemuck = "1.14"

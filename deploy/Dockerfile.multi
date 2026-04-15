@@ -1,0 +1,10 @@
+FROM rust:1.75-slim as builder
+WORKDIR /workspace
+RUN apt-get update && apt-get install -y cmake g++ libssl-dev pkg-config
+COPY . .
+RUN cargo build --release --features openai-api,hardware-prober
+
+FROM debian:12-slim as runtime
+WORKDIR /app
+COPY --from=builder /workspace/target/release/hmir-core /app/hmir
+CMD ["./hmir"]

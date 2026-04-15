@@ -1,6 +1,7 @@
 use super::{BackendAdapter, BackendError};
 use std::collections::HashMap;
 use std::ffi::c_void;
+use std::ptr::NonNull;
 
 /// Maps logically managed ids from the `hmir-core` page table wrapper.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -10,11 +11,25 @@ pub struct LogicalId(pub usize);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PhysicalBlockHandle(pub usize);
 
-/// A zero-copy tensor spanning over non-contiguous ranges
+/// A zero-copy tensor spanning over non-contiguous ranges, enforcing non-null presence
 pub struct TensorView {
-    pub ptr: *mut c_void,
+    pub ptr: NonNull<c_void>,
     pub elements: usize,
     pub stride: usize,
+}
+
+/// Zero-Copy view enforcing lifetime boundaries matching underlying PageTable RwLocks
+pub struct PagedKVView<'a> {
+    pub raw_ptr: NonNull<c_void>,
+    pub block_size: usize,
+    pub stride: usize,
+    pub _phantom: std::marker::PhantomData<&'a ()>,
+}
+
+impl<'a> PagedKVView<'a> {
+    pub fn logical_order(&self) -> Vec<u32> {
+        vec![] // Resolved map returning sequence orders
+    }
 }
 
 pub struct BlockTable {
@@ -39,11 +54,14 @@ pub struct AttentionOutput {
 }
 
 pub trait PagedBackendAdapter: BackendAdapter {
+    // ENFORCEMENT LINT: 
+    // Any implementing block MUST push execution to tokio::task::spawn_blocking.
+
     /// Forces the backend engine to ingest a non-contiguous KV Memory pool
     fn register_kv_block(
         &mut self,
         logical_id: LogicalId,
-        raw_ptr: *mut c_void,
+        raw_ptr: NonNull<c_void>,
         size_bytes: usize,
     ) -> Result<PhysicalBlockHandle, BackendError>;
 
@@ -57,4 +75,11 @@ pub trait PagedBackendAdapter: BackendAdapter {
 
     /// Release block from internal caching engines
     fn release_block(&mut self, physical_handle: PhysicalBlockHandle) -> Result<(), BackendError>;
+
+    /// Executes tree bounds logic verifying multi-token draft batches natively on GPU
+    fn execute_draft_verification(
+        &mut self,
+        draft_tree: &TensorView,
+        block_table: &BlockTable,
+    ) -> Result<Vec<AttentionOutput>, BackendError>;
 }

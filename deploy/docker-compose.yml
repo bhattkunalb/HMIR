@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  hmir-cpu:
+    image: hmir/runtime:latest
+    profiles: ["cpu-fallback"]
+    ports: ["8080:8080"]
+    command: ["./hmir", "--force-cpu"]
+
+  hmir-benchmark:
+    image: hmir/bench-harness:latest
+    profiles: ["benchmark"]
+    depends_on:
+      - hmir-cpu
+    environment:
+      TARGET_ENDPOINT: "http://hmir-cpu:8080"

@@ -1,7 +1,15 @@
 [workspace]
 members = [
     "hmir-core",
-    "hmir-sys"
+    "hmir-sys",
+    "hmir-pyo3",
+    "hmir-dashboard",
+    "hmir-hardware-prober",
+    "hmir-api",
+    "hmir-bench",
+    "deploy/packaging/hmir-cli",
+    "crates/hmir-e2e",
+    "deploy/packaging/hmir-cli"
 ]
 resolver = "2"
 

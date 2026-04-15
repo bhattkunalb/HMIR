@@ -1,0 +1,8 @@
+[package]
+name = "hmir-hardware-prober"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hmir-core = { path = "../hmir-core" }
+tokio = { version = "1.28", features = ["full"] }

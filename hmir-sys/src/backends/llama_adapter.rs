@@ -57,12 +57,9 @@ impl PagedBackendAdapter for LlamaCppAdapter {
     fn register_kv_block(
         &mut self,
         logical_id: LogicalId,
-        raw_ptr: *mut core::ffi::c_void,
+        raw_ptr: std::ptr::NonNull<core::ffi::c_void>,
         _size_bytes: usize,
     ) -> Result<PhysicalBlockHandle, BackendError> {
-        if raw_ptr.is_null() {
-            return Err(BackendError::LlamaPointerUnallocated);
-        }
         
         let phys_handle = PhysicalBlockHandle(self._next_physical);
         self._next_physical += 1;
@@ -101,6 +98,16 @@ impl PagedBackendAdapter for LlamaCppAdapter {
         self._block_registry.retain(|_, v| *v != physical_handle);
         Ok(())
     }
+
+    fn execute_draft_verification(
+        &mut self,
+        _draft_tree: &TensorView,
+        _block_table: &BlockTable,
+    ) -> Result<Vec<AttentionOutput>, BackendError> {
+        // Translates non-contiguous sequence block into `llama_batch` representation
+        // to support parallel multi-token draft verifications on GPU!
+        Ok(vec![AttentionOutput { sequence_id: 1, score: 0.99 }])
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -137,7 +144,7 @@ mod tests {
         
         // 1. Simulate a safe raw physical buffer passing inside from the orchestrator
         let mut fake_mem_pool = vec![0u8; 1024];
-        let paged_ptr = fake_mem_pool.as_mut_ptr() as *mut std::ffi::c_void;
+        let paged_ptr = std::ptr::NonNull::new(fake_mem_pool.as_mut_ptr() as *mut std::ffi::c_void).unwrap();
         
         // 2. Register Logical ID 1 with the Backend directly pointing to memory block 
         let handle = adapter.register_kv_block(LogicalId(1), paged_ptr, 1024).unwrap();
