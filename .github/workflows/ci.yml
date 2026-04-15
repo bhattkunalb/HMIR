@@ -96,7 +96,7 @@ jobs:
       - name: Package binaries
         run: |
           mkdir -p release-artifacts
-          cp target/release/hmir-cli release-artifacts/hmir-cli-linux-x86_64
+          cp target/release/hmir release-artifacts/hmir-linux-x86_64
           cp target/release/hmir-dashboard release-artifacts/hmir-dashboard-linux-x86_64
           # Add checksums
           cd release-artifacts && sha256sum * > SHA256SUMS.txt

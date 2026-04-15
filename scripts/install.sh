@@ -119,8 +119,8 @@ build_from_source() {
   cargo build --release --workspace --features dashboard,openai-api,hardware-prober
   
   mkdir -p "${INSTALL_DIR}"
-  cp target/release/hmir-cli target/release/hmir-dashboard "${INSTALL_DIR}/" 2>/dev/null || true
-  chmod +x "${INSTALL_DIR}"/hmir-*
+  cp target/release/hmir target/release/hmir-dashboard "${INSTALL_DIR}/" 2>/dev/null || true
+  chmod +x "${INSTALL_DIR}"/hmir*
   
   cd - >/dev/null
   rm -rf "${tmp_repo}"

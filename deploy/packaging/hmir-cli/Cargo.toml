@@ -3,6 +3,10 @@ name = "hmir-cli"
 version = "1.0.0"
 edition = "2021"
 
+[[bin]]
+name = "hmir"
+path = "src/main.rs"
+
 [dependencies]
 tokio = { version = "1.28", features = ["full"] }
 reqwest = { version = "0.11", features = ["json"] }
