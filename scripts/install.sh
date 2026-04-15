@@ -69,8 +69,9 @@ install_binaries() {
   tag=$(curl -fsSL "${RELEASE_ENDPOINT}" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
   
   if [[ -z "$tag" ]]; then
-    log_error "Failed to fetch release information. Check your internet connection."
-    exit 1
+    log_warn "No releases found yet. Falling back to source build..."
+    build_from_source
+    return
   fi
   
   log_info "Installing HMIR ${tag} for ${platform}..."

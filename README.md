@@ -36,8 +36,8 @@ docker run --gpus all -p 8080:8080 -p 3001:3001 ghcr.io/bhattkunalb/hmir:latest
 | **GPU Drivers** | NVIDIA CUDA 12+, Apple Metal (built-in), AMD ROCm/Vulkan (optional) |
 | **NPU Drivers** | Apple Neural Engine (built-in), Intel Core Ultra / Qualcomm Snapdragon (optional, auto-fallback) |
 
-🔍 **Do you need to install `llama.cpp` separately?**
-**No.** HMIR bundles `llama.cpp` as a compiled, statically linked dependency via `hmir-sys`. It is fetched and optimized during build or included in prebuilt binaries. Zero external setup required.
+🔍 **Do you need to install `llama.cpp` separately?**  
+**No.** HMIR bundles `llama.cpp` as a compiled, statically linked dependency. It is fetched and optimized during build or included in prebuilt binaries. Zero external setup required.
 
 ---
 
@@ -123,7 +123,3 @@ See `CONTRIBUTING.md` for architecture guides, benchmark methodology, and plugin
 Releases follow semantic versioning. Prebuilt binaries include checksums. Auto-update: `hmir-cli update`
 
 **License**: MIT | **Built with**: Rust, llama.cpp, ONNX, egui, axum, tokio
-
----
-
-> 💡 **First time?** Run `hmir suggest` to find the best model for your hardware, then `hmir load <path>` to start inferring.

@@ -113,11 +113,16 @@ function Install-Binaries {
         $tag = $release.tag_name
         $assets = $release.assets
     } catch {
-        Write-Error "Failed to fetch release info: $_"
+        Write-Warn "No releases found (repo may not have a release yet)."
+        Write-Warn "Falling back to source build..."
+        Build-FromSource
+        return
     }
     
     if (-not $tag) {
-        Write-Error "No release tag found. Check repository status."
+        Write-Warn "No release tag found. Falling back to source build..."
+        Build-FromSource
+        return
     }
     
     Write-Info "Installing HMIR $tag for $($PlatformInfo.Target)..."
