@@ -63,10 +63,5 @@ strip = true
 # [workspace.metadata.publish]
 # enabled = false  # Set to true + run `cargo publish` when ready
 
-[features]
-default = ["dashboard", "openai-api", "hardware-prober"]
-dashboard = []
-openai-api = []
-hardware-prober = []
-publish = []  # Enable to allow crates.io publish in CI
-v1-1-preview = []  # Future performance features
+# Note: Feature flags (dashboard, openai-api, hardware-prober, etc.)
+# are defined in each crate's own Cargo.toml, not at the workspace level.

@@ -185,9 +185,10 @@ function Build-FromSource {
     
     # Check Rust toolchain
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        Write-Error "Rust toolchain required for source build."
-        Write-Error "Install via: winget install Rustlang.Rustup"
-        Write-Error "Or visit: https://rustup.rs"
+        Write-Host "[!] Rust toolchain required for source build." -ForegroundColor $ColorError
+        Write-Host "    Install via: winget install Rustlang.Rustup" -ForegroundColor $ColorError
+        Write-Host "    Or visit: https://rustup.rs" -ForegroundColor $ColorError
+        return
     }
     
     # Clone repo to temp
@@ -198,19 +199,27 @@ function Build-FromSource {
     try {
         Push-Location $tempRepo
         
-        # Build release
+        # Build release (no --features on virtual workspace manifest)
         Write-Info "Building release binaries..."
-        cargo build --release --workspace --features dashboard,openai-api,hardware-prober
+        cargo build --release --workspace 2>&1 | Out-Host
         
         # Install to target path
         if (-not (Test-Path $InstallPath)) {
             New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
         }
         
-        Copy-Item "target\release\hmir-cli.exe" -Destination $InstallPath -Force
-        Copy-Item "target\release\hmir-dashboard.exe" -Destination $InstallPath -Force
-        
-        Write-Success "Build complete. Binaries installed to $InstallPath"
+        # Copy all hmir-* binaries found in target/release
+        $binaries = Get-ChildItem "target\release\hmir*.exe" -ErrorAction SilentlyContinue
+        if ($binaries) {
+            foreach ($bin in $binaries) {
+                Copy-Item $bin.FullName -Destination $InstallPath -Force
+                Write-Info "Installed $($bin.Name)"
+            }
+            Write-Success "Build complete. Binaries installed to $InstallPath"
+        } else {
+            Write-Warn "Build completed but no hmir-*.exe binaries found in target/release."
+            Write-Warn "The workspace crates may not yet define [[bin]] targets."
+        }
         
     } finally {
         Pop-Location
@@ -246,31 +255,80 @@ function Update-UserPath {
 function Test-NPUDrivers {
     if ($SkipNPUCheck) { return }
     
-    Write-Info "Checking for NPU drivers..."
+    Write-Info "Checking for NPU hardware and drivers..."
     
     $npuDetected = $false
     
-    # Intel OpenVINO NPU
-    if (Test-Path "C:\Program Files\Intel\OpenVINO") {
-        Write-Success "Intel OpenVINO NPU runtime detected"
-        $npuDetected = $true
+    # Method 1: Query PnP devices for NPU/AI accelerator hardware
+    try {
+        $npuDevices = Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {
+            $_.FriendlyName -match '(?i)(NPU|Neural|AI Accelerator|Machine Learning|Movidius|VPU)' -or
+            $_.Class -match '(?i)(AIAccelerator|SoftwareComponent)' -and $_.FriendlyName -match '(?i)(NPU|Neural)'
+        }
+        if ($npuDevices) {
+            foreach ($dev in $npuDevices) {
+                Write-Success "NPU detected: $($dev.FriendlyName) [Status: $($dev.Status)]"
+                $npuDetected = $true
+            }
+        }
+    } catch {
+        # Get-PnpDevice not available on all editions
     }
     
-    # Qualcomm QNN (Snapdragon X Elite)
-    if (Get-Command qnn-context-binary-generator -ErrorAction SilentlyContinue) {
-        Write-Success "Qualcomm QNN runtime detected"
-        $npuDetected = $true
+    # Method 2: Query WMI for Intel NPU (common on Core Ultra)
+    try {
+        $intelNpu = Get-CimInstance -ClassName Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -match '(?i)(Intel.*NPU|Intel.*AI Boost|Intel.*Neural|Meteor Lake.*NPU|Arrow Lake.*NPU|Lunar Lake.*NPU)'
+        }
+        if ($intelNpu -and -not $npuDetected) {
+            foreach ($dev in $intelNpu) {
+                Write-Success "Intel NPU detected: $($dev.Name)"
+                $npuDetected = $true
+            }
+        }
+    } catch {}
+    
+    # Method 3: Check for Qualcomm NPU (Snapdragon X Elite/Plus)
+    try {
+        $qcomNpu = Get-CimInstance -ClassName Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -match '(?i)(Qualcomm.*NPU|Qualcomm.*AI|Hexagon|QC.*NPU)'
+        }
+        if ($qcomNpu -and -not $npuDetected) {
+            foreach ($dev in $qcomNpu) {
+                Write-Success "Qualcomm NPU detected: $($dev.Name)"
+                $npuDetected = $true
+            }
+        }
+    } catch {}
+    
+    # Method 4: Check for known runtime SDKs
+    if (-not $npuDetected) {
+        if (Test-Path "C:\Program Files\Intel\OpenVINO") {
+            Write-Success "Intel OpenVINO NPU runtime detected"
+            $npuDetected = $true
+        }
+        if (Get-Command qnn-context-binary-generator -ErrorAction SilentlyContinue) {
+            Write-Success "Qualcomm QNN runtime detected"
+            $npuDetected = $true
+        }
     }
     
-    # Windows ML / DirectML (fallback)
-    if (Get-WindowsOptionalFeature -Online -FeatureName "Microsoft-Windows-Subsystem-Linux" -ErrorAction SilentlyContinue) {
-        Write-Info "Windows ML / DirectML available as fallback backend"
-    }
+    # DirectML availability (works as GPU/NPU abstraction layer)
+    try {
+        $directml = Get-CimInstance -ClassName Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -match '(?i)(DirectML|DirectX.*Machine Learning)'
+        }
+        if (-not $directml) {
+            Write-Info "DirectML available as fallback compute backend"
+        }
+    } catch {}
     
     if (-not $npuDetected) {
-        Write-Warn "No dedicated NPU runtime detected. HMIR will auto-fallback to GPU/CPU."
-        Write-Warn "For Snapdragon X Elite: Install Qualcomm AI Engine Direct drivers"
-        Write-Warn "For Intel Core Ultra: Install OpenVINO 2024.0+"
+        Write-Warn "No dedicated NPU hardware detected. HMIR will auto-fallback to GPU/CPU."
+        Write-Warn "If you have an NPU, ensure drivers are installed:"
+        Write-Warn "  Intel Core Ultra: Install Intel NPU Driver from intel.com"
+        Write-Warn "  Snapdragon X: Install Qualcomm AI Engine Direct drivers"
+        Write-Warn "  (Run 'Get-PnpDevice | Where FriendlyName -match NPU' to check)"
     }
 }
 
