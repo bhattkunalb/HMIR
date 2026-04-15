@@ -1,0 +1,15 @@
+[package]
+name = "hmir-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core memory and orchestration logic for the Heterogeneous Memory-First Inference Runtime"
+
+[dependencies]
+# num_cpus = "1.15.0"
+# hwloc2 = "2.2"   # Simulating for now
+# bytemuck = "1.14"
+# memmap2 = "0.7"
+
+[dev-dependencies]
+# We'll stick to built-in allocators and test blocks for this phase without external pulling, 
+# ensuring pure logical trait implementation.
