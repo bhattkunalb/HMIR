@@ -34,6 +34,7 @@ impl BackendAdapter for LlamaCppAdapter {
         Ok(())
     }
 
+    #[allow(refining_impl_trait)]
     fn evaluate_batch(&self) -> impl std::future::Future<Output = Result<usize, BackendError>> + Send {
         // Here we throw the synchronous blocking C-FFI request off the main async loop.
         // This prevents the orchestrator from deadlocking during continuous batching!
@@ -57,7 +58,7 @@ impl PagedBackendAdapter for LlamaCppAdapter {
     fn register_kv_block(
         &mut self,
         logical_id: LogicalId,
-        raw_ptr: std::ptr::NonNull<core::ffi::c_void>,
+        _raw_ptr: std::ptr::NonNull<core::ffi::c_void>,
         _size_bytes: usize,
     ) -> Result<PhysicalBlockHandle, BackendError> {
         
