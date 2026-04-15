@@ -34,6 +34,7 @@ impl BackendAdapter for LlamaCppAdapter {
         Ok(())
     }
 
+    #[allow(refining_impl_trait)]
     async fn evaluate_batch(&self) -> Result<usize, BackendError> {
         // Here we throw the synchronous blocking C-FFI request off the main async loop.
         // This prevents the orchestrator from deadlocking during continuous batching!
