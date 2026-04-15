@@ -1,8 +1,10 @@
 pub mod error;
 pub mod llama_adapter;
 pub mod onnx_adapter;
+pub mod paged;
 
 pub use error::BackendError;
+pub use paged::*;
 
 /// Defines a standard memory boundary constraint shape.
 pub struct TensorShape {

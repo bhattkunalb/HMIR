@@ -1,3 +1,3 @@
 pub mod allocator;
 
-pub use allocator::{LogicalPageTable, MmapTensor, BlockId, PageStatus};
+pub use allocator::{LogicalPageTable, MmapTensor, LogicalBlockId, PageStatus, PageRef};

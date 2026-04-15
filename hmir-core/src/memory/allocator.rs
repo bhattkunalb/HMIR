@@ -2,7 +2,15 @@ use std::collections::HashMap;
 
 /// Unique identifier for a memory block in the logical address space
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct BlockId(pub usize);
+pub struct LogicalBlockId(pub usize);
+
+/// Represents a raw unsafe span crossing physical memory.
+/// Tracks base placement bounds without exposing elements.
+#[derive(Debug, Clone)]
+pub struct PageRef {
+    pub raw_ptr: *mut core::ffi::c_void,
+    pub size_bytes: usize,
+}
 
 /// Identifies where a block of memory is physically residing
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,10 +41,10 @@ pub struct MmapTensor {
 pub struct LogicalPageTable {
     pub max_vram_blocks: usize,
     pub max_ram_blocks: usize,
-    // BlockId mapping to current physical location
-    mappings: HashMap<BlockId, PageStatus>,
+    // LogicalBlockId mapping to current physical location
+    mappings: HashMap<LogicalBlockId, PageStatus>,
     // A crude LRU tracker for demonstration
-    lru_counter: HashMap<BlockId, u64>,
+    lru_counter: HashMap<LogicalBlockId, u64>,
     clock: u64,
 }
 
@@ -52,7 +60,7 @@ impl LogicalPageTable {
     }
 
     /// Attempt to allocate a block in VRAM. If VRAM is full, evict the coldest block to RAM.
-    pub fn allocate_vram_block(&mut self, block: BlockId) -> Result<(), &'static str> {
+    pub fn allocate_vram_block(&mut self, block: LogicalBlockId) -> Result<(), &'static str> {
         self.clock += 1;
         let vram_count = self.mappings.values().filter(|&s| *s == PageStatus::ResidentVram).count();
 
@@ -68,7 +76,7 @@ impl LogicalPageTable {
     }
 
     /// Touches a block, marking it recently used (updates LRU)
-    pub fn touch(&mut self, block: BlockId) {
+    pub fn touch(&mut self, block: LogicalBlockId) {
         self.clock += 1;
         self.lru_counter.insert(block, self.clock);
     }
@@ -104,7 +112,7 @@ impl LogicalPageTable {
         }
     }
 
-    pub fn get_status(&self, block: BlockId) -> Option<&PageStatus> {
+    pub fn get_status(&self, block: LogicalBlockId) -> Option<&PageStatus> {
         self.mappings.get(&block)
     }
 }
@@ -122,9 +130,9 @@ mod tests {
         // Assume 2 blocks of VRAM and 2 blocks of RAM
         let mut pager = LogicalPageTable::new(2, 2);
 
-        let block1 = BlockId(1);
-        let block2 = BlockId(2);
-        let block3 = BlockId(3);
+        let block1 = LogicalBlockId(1);
+        let block2 = LogicalBlockId(2);
+        let block3 = LogicalBlockId(3);
 
         // Fill VRAM
         assert!(pager.allocate_vram_block(block1).is_ok());
@@ -149,12 +157,12 @@ mod tests {
         // 1 VRAM block, 1 RAM block limit
         let mut pager = LogicalPageTable::new(1, 1);
         
-        assert!(pager.allocate_vram_block(BlockId(1)).is_ok());
-        assert!(pager.allocate_vram_block(BlockId(2)).is_ok()); // Pushes 1 to RAM
+        assert!(pager.allocate_vram_block(LogicalBlockId(1)).is_ok());
+        assert!(pager.allocate_vram_block(LogicalBlockId(2)).is_ok()); // Pushes 1 to RAM
         
         // Block 1 is in RAM, Block 2 is in VRAM. Both are full. 
         // Adding Block 3 should trigger a hard OOM fallback error matching guardrails.
-        let result = pager.allocate_vram_block(BlockId(3));
+        let result = pager.allocate_vram_block(LogicalBlockId(3));
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Out of Memory (OOM): Both VRAM and System RAM are exhausted.");
     }
