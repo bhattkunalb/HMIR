@@ -1,168 +1,102 @@
-# 🚀 HMIR: Heterogeneous Memory-First Inference Runtime
+# 💎 HMIR ELITE: Heterogeneous Model Inference Runtime
 
-**Run local LLMs that automatically orchestrate NPU + GPU + CPU for maximum performance per watt.**
+**HMIR (Heterogeneous Model Inference Runtime)** is a high-performance, local-first intelligence engine that orchestrates NPUs, GPUs, and CPUs into a single unified compute fabric. 
 
-[![GitHub Release](https://img.shields.io/github/v/release/bhattkunalb/HMIR?label=release)](https://github.com/bhattkunalb/HMIR/releases)
-[![License](https://img.shields.io/github/license/bhattkunalb/HMIR)](LICENSE)
-[![CI](https://github.com/bhattkunalb/HMIR/actions/workflows/ci.yml/badge.svg)](https://github.com/bhattkunalb/HMIR/actions)
-<!-- [![Crates.io](https://img.shields.io/crates/v/hmir.svg)](https://crates.io/crates/hmir) --> <!-- Uncomment after first crates.io publish -->
+Built for the "AI PC" era, HMIR prioritizes thermal-efficient NPU execution (Intel AI Boost, Qualcomm Hexagon, Apple Neural Engine) while speculative-scheduling across available GPU clusters to deliver maximum performance-per-watt.
 
 ---
 
-## 📦 Installation
+## ⚡ Power One-Click Install
 
-### One-Command Install
+### Windows (AI PC Native)
 
-```bash
-# Linux / macOS
-curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | sh
+Run as Administrator in PowerShell to enable deep hardware probing:
 
-# Windows (PowerShell — Run as Administrator for full NPU detection)
+```powershell
 irm https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.ps1 | iex
-
-# Docker (No install required)
-docker run --gpus all -p 8080:8080 -p 3001:3001 ghcr.io/bhattkunalb/hmir:latest
 ```
 
-The installer automatically downloads prebuilt binaries from GitHub Releases when available. If no release exists yet, it falls back to building from source using the Rust toolchain.
-
-### Build from Source
+### Linux / macOS
 
 ```bash
-git clone https://github.com/bhattkunalb/HMIR.git
-cd HMIR
-cargo build --release --workspace
-```
-
-> **Note:** `hmir-pyo3` (Python bindings) is excluded from the default workspace build due to Python version constraints. Build it separately with `cargo build -p hmir-pyo3` if you have Python ≤ 3.12.
-
----
-
-## ⚙️ Requirements
-
-| Component | Requirement |
-| --- | --- |
-| **OS** | macOS 13+, Windows 10/11 22H2+, Ubuntu 20.04+ / Fedora 36+ |
-| **RAM** | 8GB minimum (16GB+ recommended for 7B models) |
-| **Rust** | 1.75+ (only for source builds) |
-| **Storage** | 5GB for runtime + model cache |
-| **GPU Drivers** | NVIDIA CUDA 12+, Apple Metal (built-in), AMD ROCm/Vulkan (optional) |
-| **NPU Drivers** | Apple Neural Engine (built-in), Intel Core Ultra AI Boost, Qualcomm Snapdragon NPU (optional, auto-fallback) |
-
-🔍 **Do you need to install `llama.cpp` separately?**
-**No.** HMIR bundles `llama.cpp` as a statically linked dependency via `hmir-sys`. Zero external setup required.
-
----
-
-## 🏗️ Project Structure
-
-```text
-HMIR/
-├── hmir-core/              # Core orchestration: scheduler, memory, topology
-├── hmir-sys/               # FFI bindings: llama.cpp, ONNX Runtime (bundled)
-├── hmir-api/               # OpenAI-compatible Axum server + Prometheus metrics
-├── hmir-dashboard/         # Native egui TaskManager UI (60 FPS telemetry)
-├── hmir-hardware-prober/   # Cross-platform hardware detection (cfg-gated)
-├── hmir-bench/             # Benchmark harness: TTFT, ITL, tokens/watt
-├── hmir-pyo3/              # Python bindings (excluded from default workspace build)
-├── crates/hmir-e2e/        # End-to-end validation: daemon lifecycle + UI smoke
-├── deploy/
-│   ├── packaging/hmir-cli/ # CLI binary: suggest, start, logs, update
-│   ├── docker-compose.yml  # Multi-service setup (daemon + optional WebUI)
-│   └── Dockerfile.multi    # Multi-stage build with GPU/NPU profiles
-├── scripts/
-│   ├── install.sh          # Linux/macOS installer (release download + source fallback)
-│   └── install.ps1         # Windows installer (NPU detection via ComputeAccelerator class)
-└── examples/
-    ├── langchain_hmir.py   # LangChain custom LLM integration
-    ├── openwebui_docker.yml # Docker Compose for Open WebUI + HMIR
-    └── llamaindex_rag.rs   # Rust LlamaIndex example with HMIR API
+curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | sh
 ```
 
 ---
 
-## 🎯 Auto-Model Recommendation
+## 🛰️ Elite Orchestration CLI
 
-Run `hmir suggest` to get hardware-optimized model recommendations:
+The new `hmir` CLI manages the entire lifecycle of your intelligence node.
+
+### 🔍 Hardware Intelligence Routing
+
+Probes your silicon layer and suggests the optimal intelligence tier for your current thermals and memory pressure.
 
 ```bash
-$ hmir suggest --strategy latency
-🔍 Probing hardware...
-✅ Detected: Intel Core Ultra (AI Boost NPU), Intel Arc iGPU, 32GB RAM
-📊 Routing Strategy: Latency-Optimized
+$ hmir suggest
+  _    _ __  __ _____ _____  
+ | |  | |  \/  |_   _|  __ \ 
+ | |__| | \  / | | | | |__) |
+ |  __  | |\/| | | | |  _  / 
+ | |  | | |  | |_| |_| | \ \ 
+ |_|  |_|_|  |_|_____|_|  \\_\\
 
-RECOMMENDED MODELS:
-1. Meta-Llama-3-8B-Instruct-Q4_K_M.gguf
-   • VRAM: ~5.2 GB | RAM: 0 GB | Expected TTFT: <450ms
-   • Routing: GPU (Arc) + NPU draft → CPU fallback
-   • Command: hmir load models/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf
+[ HMIR ELITE | Intelligence Routing Engine ]
 
-2. Phi-3-mini-4k-instruct-Q5_K_S.gguf
-   • VRAM: ~3.1 GB | RAM: 0 GB | Expected TTFT: <280ms
-   • Routing: NPU draft + GPU verify
-   • Command: hmir load models/Phi-3-mini-4k-instruct-Q5_K_S.gguf
+🔍 Probing Hardware Layer...
+✅ CPU: Intel(R) Core(TM) Ultra 7 155H
+✅ GPU: Intel(R) Arc(TM) Graphics
+✅ NPU: Intel(R) AI Boost (⚡ HIGH-SPEED DETECTED)
+🌡️  Thermals: 42.1°C 🟢 (Optimal)
+📊 Memory: 32.0 GiB Total Physical RAM
+
+💎 RECOMMENDED INTELLIGENCE TIERS:
+--------------------------------------------------
+🥇 [ELITE TIER] Qwen 2.5 1.5B (INT4 OpenVINO)
+   • Reason: NATIVE NPU ACCELERATION available via Intel/Qualcomm
+   • Stats: ~120 T/s | Ultra-low Power | 0% CPU Overhead
+   👉 Command: hmir start --model qwen2.5-1.5b-ov
+
+🥈 [ULTIMATE TIER] Llama 3.1 8B (INT4 OpenVINO)
+   • Reason: High-fidelity reasoning on Intel(R) AI Boost silicon
+   • Stats: ~25 T/s | Balanced Power
+   👉 Command: hmir start --model llama-3.1-8b-ov
+--------------------------------------------------
 ```
 
----
-
-## 🖥️ Dashboard & API Access
-
-### Live TaskManager UI
-
-Launch with: `hmir start --dashboard`
-
-- Real-time CPU/GPU/NPU utilization bars
-- Active task registry with color-coded routing (🔵 GPU, 🟣 NPU, 🟠 CPU)
-- Speculative acceptance rate, swap throughput, memory pressure graphs
-- Controls: Pause/Resume/Kill, Strategy toggle, Hot-swap models, Force fallback
-
-### OpenAI-Compatible API
-
+### 🚀 Instant Deployment
+Start the background daemon and automatically launch the unified web console.
 ```bash
-curl http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "meta-llama-3-8b",
-    "messages": [{"role": "user", "content": "Explain quantum entanglement simply"}],
-    "stream": true
-  }'
+hmir start --dashboard
 ```
 
-Metrics: `http://localhost:8080/metrics` (Prometheus-compatible)
+---
+
+## 🖥️ Unified Control Center (Dashboard)
+
+HMIR includes a native, high-performance telemetry dashboard (`hmir-dashboard`) built with Rust and egui.
+
+- **Real-time Silicon Monitoring**: Per-core utilization, NPU throughput, and thermal zones.
+- **VRAM Logic**: Native tracking of dedicated vs. shared video memory.
+- **Intelligence Vault**: One-click NPU model downloads and hot-swapping.
+- **Unified Chat**: Access the local web portal at `http://localhost:8081` for the full chat experience.
 
 ---
 
-## 🌐 Hardware Compatibility Matrix
+## 🏗️ Technical Architecture
 
-| Platform | NPU | GPU | CPU | Speculative Decoding | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Apple Silicon (M1/M2/M3) | ✅ ANE | ✅ Metal | ✅ ARM | ✅ Unified Memory optimized | Best tokens/watt |
-| Intel Core Ultra | ✅ AI Boost | ✅ Arc/iGPU | ✅ x86 | ✅ NPU draft + GPU verify | Balanced hybrid |
-| Windows + Snapdragon X Elite | ✅ Qualcomm QNN | ❌ | ✅ ARM | ✅ NPU draft + CPU verify | Battery champion |
-| Linux + RTX 30/40 series | ❌ | ✅ CUDA | ✅ x86 | ⚠️ CPU draft + GPU verify | Max raw throughput |
-
-> **NPU detection on Windows** uses the `ComputeAccelerator` device class via PnP/WMI. Run `Get-PnpDevice -Class ComputeAccelerator` to verify your NPU is visible.
+- **`hmir-core`**: The heartbeat. Handles the scheduling logic and heterogeneous memory management.
+- **`hmir-hardware-prober`**: Deep silicon discovery across WMI (Windows), sysfs (Linux), and sysctl (macOS).
+- **`hmir-api`**: High-throughput Axum server with OpenAI-compatible endpoint compatibility.
+- **`hmir-npu-worker`**: Execution bridge for OpenVINO and QNN-optimized NPU interference.
 
 ---
 
-## 🔧 Troubleshooting
+## 🤝 Community & Support
 
-| Issue | Fix |
-| --- | --- |
-| NPU not detected | Check driver installation. HMIR safely routes to GPU/CPU. Run `hmir logs --level debug` |
-| VRAM OOM during long context | HMIR auto-swaps KV cache to RAM. Reduce batch size: `hmir config set batch_max_tokens 2048` |
-| Dashboard blank on first run | Wait 2-3s for telemetry stream. Verify port 3001 isn't blocked. Run `hmir status` |
-| Build fails on `hmir-pyo3` | Requires Python ≤ 3.12. Excluded from workspace by default — build separately if needed. |
-| Install script builds from source | No prebuilt release yet. Tag a release: `git tag -a v1.x.x -m "..." && git push origin v1.x.x` |
-
-Collect logs: `hmir logs --since 5m > hmir_debug.log`
+- **Repository**: [bhattkunalb/HMIR](https://github.com/bhattkunalb/HMIR)
+- **License**: MIT
+- **Built with**: Rust 🦀, OpenVINO, llama.cpp, egui, axum.
 
 ---
-
-## 🤝 Contributing & Releases
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture guides, testing methodology, and PR workflow.
-
-Releases follow semantic versioning. Prebuilt binaries are generated by CI on tag push and include SHA-256 checksums. Auto-update: `hmir-cli update`
-
-**License**: [MIT](LICENSE) | **Built with**: Rust, llama.cpp, ONNX Runtime, egui, axum, tokio
+**HMIR: The Silicon-Aware Runtime.**

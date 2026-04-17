@@ -3,3 +3,11 @@
 Cargo.lock
 **/*.rs.bk
 tmp/
+/model/
+/Phi-3-mini-4k-instruct-int4-ov/
+*.log
+*.heapsnapshot
+*.gz
+__pycache__/
+.venv/
+/.hmir/

@@ -1,0 +1,38 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "hmir",
+    "onnxruntime",
+    "dtolnay",
+    "softprops",
+    "clippy",
+    "rustfmt",
+    "Swatinem",
+    "nocapture",
+    "rustup",
+    "msvc",
+    "prereqs",
+    "tlsv",
+    "langchain",
+    "openwebui",
+    "llamaindex",
+    "RUSTFLAGS",
+    "paged",
+    "axum",
+    "tokio",
+    "egui",
+    "vram",
+    "ttft",
+    "Meteor",
+    "Snapdragon",
+    "winget",
+    "iex",
+    "irm"
+  ],
+  "ignorePaths": [
+    "target",
+    "Cargo.lock",
+    ".git"
+  ]
+}
