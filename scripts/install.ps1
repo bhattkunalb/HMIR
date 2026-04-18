@@ -37,6 +37,12 @@ function Invoke-ForcePurge {
     # 2. Hard Purge Binaries (Rename-to-Delete strategy for locked files)
     if (Test-Path $InstallPath) {
         Write-Info "Executing Rename-to-Delete purge in $InstallPath..."
+        
+        # Clean scripts if they exist
+        if (Test-Path "$InstallPath\scripts") {
+            Remove-Item -Path "$InstallPath\scripts" -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
         $binaries = Get-ChildItem -Path $InstallPath -Filter "*.exe" -ErrorAction SilentlyContinue
         foreach ($bin in $binaries) {
             try {
@@ -248,6 +254,18 @@ function Build-FromSource {
                 Copy-Item $bin.FullName -Destination $InstallPath -Force
                 Write-Info "Installed $($bin.Name)"
             }
+
+            # Copy scripts directory for NPU worker
+            $srcScripts = Join-Path $tempRepo "scripts"
+            if (Test-Path $srcScripts) {
+                $destScripts = Join-Path $InstallPath "scripts"
+                if (-not (Test-Path $destScripts)) {
+                    New-Item -ItemType Directory -Path $destScripts -Force | Out-Null
+                }
+                Copy-Item -Path "$srcScripts\*" -Destination $destScripts -Force -Recurse
+                Write-Success "NPU scripts installed to $destScripts"
+            }
+
             Write-Success "Build complete. Binaries installed to $InstallPath"
         } else {
             Write-Warn "Build completed but no hmir-*.exe binaries found in target/release."

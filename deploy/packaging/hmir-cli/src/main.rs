@@ -37,6 +37,12 @@ enum Commands {
     },
     /// Stop all running HMIR instances
     Stop,
+    /// Launch the native telemetry dashboard directly
+    Dashboard {
+        /// The port to connect to the API on
+        #[arg(short, long, default_value = "8080")]
+        port: u16,
+    },
     /// Uninstall HMIR ELITE and purge all runtime data
     Uninstall,
 }
@@ -66,6 +72,12 @@ async fn main() {
         Commands::Stop => {
             stop_all_instances();
             println!("✅ HMIR ELITE specialized resources released.");
+        }
+        Commands::Dashboard { port } => {
+            println!("🖥️  Launching HMIR ELITE Dashboard...");
+            // We reuse the start_daemon logic but specify dashboard=true
+            // Optimization: if API is already running, start_daemon should handle it (it does via health checks)
+            commands::start::start_daemon(port, true, None).await;
         }
         Commands::Uninstall => {
             println!("🗑️  HMIR ELITE | COMMENCING FULL SYSTEM UNINSTALL");

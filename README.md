@@ -86,6 +86,20 @@ HMIR Elite includes a native, high-performance telemetry dashboard built with Ru
 
 ---
 
+## 💎 Elite Performance Dashboard
+
+HMIR Elite includes a native, high-performance telemetry dashboard for real-time hardware monitoring.
+
+```bash
+hmir dashboard
+```
+
+- **Inference Telemetry**: Track tokens/sec and KV cache utilization.
+- **Hardware Probing**: Real-time NPU/GPU/CPU load and thermals.
+- **Model Management**: Hot-swap models and view VRAM distribution.
+
+---
+
 ## 🏗️ Technical Architecture
 
 - **`hmir-core`**: The heartbeat. Handles scheduling logic and heterogeneous memory management.

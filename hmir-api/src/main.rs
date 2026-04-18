@@ -578,7 +578,10 @@ async fn log_stream(
 
 #[tokio::main]
 async fn main() {
-    let port = 8080;
+    let port: u16 = std::env::var("HMIR_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8080);
 
     let telemetry = hmir_core::telemetry::TelemetrySink::new(1024);
     let telemetry_arc = std::sync::Arc::new(telemetry);
@@ -758,9 +761,20 @@ async fn main() {
         )
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
-        .await
-        .unwrap();
+    let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await {
+        Ok(l) => l,
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            eprintln!("❌ [ERROR] Port {} is already in use.", port);
+            eprintln!("   Try running 'hmir stop' first, or use a different port with '--port'.");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("❌ [ERROR] Failed to bind to port {}: {}", port, e);
+            std::process::exit(1);
+        }
+    };
     println!("🚀 HMIR Elite Unified Node: http://127.0.0.1:{}", port);
-    axum::serve(listener, app).await.unwrap();
+    if let Err(e) = axum::serve(listener, app).await {
+        eprintln!("❌ [ERROR] Server error: {}", e);
+    }
 }
