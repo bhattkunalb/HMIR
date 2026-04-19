@@ -17,3 +17,4 @@ chrono = { version = "0.4.44", features = ["clock"] }
 tower-http = { version = "0.6.8", features = ["cors"] }
 reqwest = { workspace = true, features = ["stream", "json"] }
 lazy_static = "1.4"
+dirs = "5.0"

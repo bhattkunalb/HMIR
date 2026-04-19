@@ -123,9 +123,6 @@ jobs:
     needs: release
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    env:
-      # Job-level env mapping can sometimes resolve IDE linter warnings
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -133,6 +130,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish crates (in dependency order)
+        if: github.repository == 'bhattkunalb/HMIR'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets['CARGO_REGISTRY_TOKEN'] }}
         run: |
           # Only run if --features publish is explicitly enabled
           if cargo metadata --format-version 1 | jq -r '.packages[].features | .publish' | grep -q 'true'; then

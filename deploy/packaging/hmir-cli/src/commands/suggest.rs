@@ -14,7 +14,7 @@ impl ModelRecommender {
         println!(" |  __  | |\\/| | | | |  _  / ");
         println!(" | |  | | |  | |_| |_| | \\ \\ ");
         println!(" |_|  |_|_|  |_|_____|_|  \\_\\");
-        println!("\n[ HMIR ELITE | Intelligence Routing Engine ]\n");
+        println!("\n[ HMIR | Intelligent Routing Engine ]\n");
 
         println!("🔍 Probing Hardware Layer...");
         let state = os_polling::poll_hardware().await;
@@ -54,33 +54,40 @@ impl ModelRecommender {
                 "   • Reason: LOW-POWER mode active due to high thermals ({:.1}°C)",
                 state.cpu_temp_c
             );
-            println!("   • Routing: Optimized for CPU/Efficiency Cores");
-            println!("   👉 Command: hmir start --model phi-3-mini\n");
+            println!("   • Routing: GGUF on CPU or light GPU fallback");
+            println!("   👉 Command: hmir start --model phi3-mini\n");
         } else if state.npu_name != "None" {
             println!("🥇 [ELITE TIER] Qwen 2.5 1.5B (INT4 OpenVINO)");
             println!("   • Reason: NATIVE NPU ACCELERATION available via Intel/Qualcomm");
             println!("   • Stats: ~120 T/s | Ultra-low Power | 0% CPU Overhead");
             println!("   👉 Command: hmir start --model qwen2.5-1.5b-ov\n");
 
-            println!("🥈 [ULTIMATE TIER] Llama 3.1 8B (INT4 OpenVINO)");
-            println!(
-                "   • Reason: High-fidelity reasoning on {} silicon",
-                state.npu_name
-            );
-            println!("   • Stats: ~25 T/s | Balanced Power");
-            println!("   👉 Command: hmir start --model llama-3.1-8b-ov\n");
-        } else if state.gpu_name.to_uppercase().contains("NVIDIA") {
-            println!("🥇 [PERFORMANCE TIER] Llama 3.1 8B (CUDA Native)");
-            println!(
-                "   • Reason: NVIDIA GPU cluster detected ({} )",
-                state.gpu_name
-            );
-            println!("   • Stats: High-throughput CUDA routing");
-            println!("   👉 Command: hmir start --model llama-3.1-8b-cuda\n");
+            println!("🥈 [BALANCED TIER] Phi-3 Mini (INT4 OpenVINO)");
+            println!("   • Reason: Smaller NPU-friendly pack for highly interactive workloads");
+            println!("   • Stats: Lower memory footprint | Fast startup");
+            println!("   👉 Command: hmir start --model phi3-mini-ov\n");
+        } else if state.gpu_name.to_uppercase().contains("NVIDIA")
+            || state.gpu_name.to_uppercase().contains("AMD")
+            || state.gpu_name.to_uppercase().contains("APPLE")
+            || state.gpu_name.to_uppercase().contains("ARC")
+        {
+            println!("🥇 [PERFORMANCE TIER] Llama 3.2 3B (GGUF)");
+            println!("   • Reason: GPU-capable system detected ({})", state.gpu_name);
+            println!("   • Stats: Good quality-to-latency balance on llama.cpp-style backends");
+            println!("   👉 Command: hmir start --model llama3.2-3b\n");
+
+            println!("🥈 [HIGHER CAPACITY TIER] Llama 3 8B (GGUF)");
+            println!("   • Reason: Best suited for larger GPU memory budgets");
+            println!("   • Stats: Higher quality, higher memory cost");
+            println!("   👉 Command: hmir start --model llama3-8b-gguf\n");
         } else {
-            println!("🥇 [STANDARD TIER] Mistral Nemo 12B (GGUF)");
-            println!("   • Reason: CPU-dominant execution with partial GPU offloading");
-            println!("   👉 Command: hmir start --model mistral-nemo\n");
+            println!("🥇 [STANDARD TIER] Phi-3 Mini (GGUF)");
+            println!("   • Reason: CPU-dominant execution path with minimal memory pressure");
+            println!("   👉 Command: hmir start --model phi3-mini\n");
+
+            println!("🥈 [BALANCED TIER] Llama 3.2 3B (GGUF)");
+            println!("   • Reason: Better reasoning quality when CPU budget allows");
+            println!("   👉 Command: hmir start --model llama3.2-3b\n");
         }
 
         println!("--------------------------------------------------");

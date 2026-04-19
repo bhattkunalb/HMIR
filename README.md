@@ -1,119 +1,263 @@
-# HMIR Elite: Unified Cognitive Hardware Interface
+# HMIR
 
-![HMIR Elite Banner](assets/hmir_elite_banner.png)
+![HMIR Banner](assets/hmir_elite_banner.png)
 
-**High-performance unified dashboard and inference engine for heterogeneous compute.**
+> Run one local LLM service across NPU, GPU, and CPU with NPU-first scheduling and automatic fallback.
 
-*Orchestrate local AI across NPUs, GPUs, and CPUs with zero-latency glassmorphic monitoring.*
+HMIR is a heterogeneous local inference runtime for Windows, Linux, and macOS. It detects the hardware available on the machine, selects the best backend for the requested model, and exposes one developer-friendly API instead of forcing users to hand-pick devices and runtimes.
 
----
+The design goal is simple:
 
-## 🚀 One-Command Install
+- prefer `NPU` when it is available and the model fits
+- fall back to `GPU`, then `CPU`, without manual reconfiguration
+- keep the serving surface OpenAI-compatible
+- make backend choice visible and explainable
 
-HMIR Elite automatically handles hardware probing, driver detection, and environment synchronization.
+Full production architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-### Windows (PowerShell)
+## One-Command Install
+
+### Windows
 
 ```powershell
 irm https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.ps1 | iex
 ```
 
-### Linux & macOS (Bash)
+### Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | bash
 ```
 
----
+### macOS
 
-## ✨ Why HMIR Elite?
+```bash
+curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | bash
+```
 
-- 💎 **Integrated Glassmorphic Dashboard**: Real-time telemetry for NPU, GPU, and CPU utilization alongside a premium chat interface.
-- ⚡ **Intel® NPU Acceleration**: Native OpenVINO™ execution on Intel AI Boost (Meteor Lake/Core Ultra) hardware for maximum efficiency.
-- 🌊 **Zero-Warning Streaming**: Robust Server-Sent Events (SSE) stability with intelligent boundary reassembly for smooth token generation.
-- 🛠️ **Unified Binary Core**: A single, high-performance Rust/Axum engine managing multiple Python-based hardware microservices.
-- 📦 **Portable isolation**: Fully containerized or isolated virtual environments with automated PATH and dependency management.
+After install, HMIR probes local hardware automatically and routes across `NPU`, `GPU`, and `CPU`.
 
----
+## Hardware Scope
 
-## 🏗️ Core Architecture
+HMIR is not intended to be Intel-only.
 
-HMIR utilizes a hybrid architecture to bridge high-level cognitive frameworks with low-level hardware acceleration.
+- `Intel`: OpenVINO-friendly NPU, Intel GPU, CPU
+- `NVIDIA`: CUDA-capable GPU fallback plus CPU
+- `AMD`: GPU fallback plus CPU, with room for vendor-specific NPU integrations
+- `Apple Silicon`: Metal / MLX-style future path plus CPU
+- `Qualcomm / AI PC NPUs`: targeted through pluggable backend support
+- `CPU-only systems`: supported as a first-class fallback
+
+## Problem
+
+Local LLM stacks are still fragmented:
+
+- one runtime is great on `Intel NPU` but weak elsewhere
+- another is strong on `CUDA` but ignores `NPU`
+- CPU fallback often becomes a separate workflow
+- developers end up choosing devices manually instead of targeting one local service
+
+That is the gap HMIR is designed to close.
+
+## Solution
+
+HMIR combines:
+
+- a `device capability detector`
+- a `scheduler` that scores NPU, GPU, and CPU plans
+- a `backend abstraction layer` for runtimes like `OpenVINO` and `llama.cpp`
+- a `model manager` that tracks compatible model packages
+- an `execution engine` that runs the selected plan
+- an `OpenAI-compatible API layer`
+
+## Features
+
+- cross-platform target: `Windows`, `Linux`, `macOS`
+- cross-hardware target: `NPU`, `GPU`, `CPU`
+- `NPU-first` scheduling with transparent fallback
+- pluggable backends instead of hard-coded device logic
+- request-level load balancing across available devices
+- native dashboard with built-in chat, controls, integrations, and logs
+- simple CLI for suggest, pull, serve, logs, and integration flows
+- OpenAI-compatible `/v1/chat/completions`
+- explicit logging of selected backend and device
+
+## 🏗️ Architecture
 
 ```mermaid
 graph TD
-    User["Operator (Browser/CLI)"] -->|HTTP/SSE| API["HMIR REST API (Rust/Axum)"]
-    API -->|Real-time Stats| Dashboard["Glassmorphic UI"]
-    API -->|Inference Proxy| NPUWorker["NPU Worker (Python/OpenVINO)"]
-    NPUWorker -->|Native Compute| IntelNPU["Intel® AI Boost (NPU)"]
-    API -.->|Dynamic Fallback| CPU["Unified CPU/GPU Pipeline"]
-
-    style IntelNPU fill:#00f2ff,stroke:#00f2ff,color:#000
-    style API fill:#7000ff,stroke:#7000ff,color:#fff
+    User([User / SDK / CLI]) --> API[HMIR API Layer]
+    subgraph Core ["HMIR ELITE CORE"]
+        API --> Sched[NPU-First Scheduler]
+        Sched --> MM[Model Manager]
+        Sched --> Det[Hardware Detector]
+        MM --> Engine[Execution Engine]
+        Det --> Engine
+    end
+    subgraph Backends ["ACCELERATION LAYER"]
+        Engine --> OV[OpenVINO Backend]
+        Engine --> LCPP[llama.cpp Backend]
+        OV --> NPU[Intel NPU / AI Boost]
+        OV --> iGPU[Intel UHD/Iris GPU]
+        LCPP --> dGPU[Discrete GPU / CUDA]
+        LCPP --> CPU[System CPU]
+    end
 ```
 
----
+## 🚀 Model Matrix
 
-## 🖥️ Hardware Support Matrix
+| HW Target | Preferred Format | Engine | Example Alias |
+| --- | --- | --- | --- |
+| **Intel NPU** | OpenVINO IR | `OpenVINO` | `qwen2.5-1.5b-ov` |
+| **Intel iGPU** | OpenVINO IR | `OpenVINO` | `phi3-mini-ov` |
+| **NVIDIA GPU** | GGUF | `llama.cpp` | `llama3.2-3b` |
+| **Apple ANE** | CoreML / GGUF | `llama.cpp` | `phi3-mini` |
+| **System CPU** | GGUF | `llama.cpp` | `llama3-8b-gguf` |
 
-| Target Hardware | Compute Provider | status | Priority |
-| :--- | :--- | :--- | :--- |
-| **Intel® NPU (AI Boost)** | OpenVINO™ GenAI | 🟢 **STABLE** | Elite |
-| **Intel® ARC™ GPU** | OpenVINO / IPEX | 🟢 **STABLE** | Native |
-| **Apple Silicon (M1/M2/M3)** | CoreML / MLX | 🟢 **STABLE** | Native |
-| **NVIDIA RTX™ GPU** | CUDA / TensorRT | 🟡 **BETA** | Proxy |
-| **Unified CPU** | OpenVINO / ONNX | 🟢 **STABLE** | Fallback |
+Rule:
 
----
+- use `OpenVINO IR` packs with `OpenVINO`
+- use `GGUF` packs with `llama.cpp`
 
-## 🛠️ Developer Quick Start
+## Quick Start
 
-### 1. Interaction via CLI
+### 1. Probe the machine
 
 ```bash
-# Probe hardware and get optimized model recommendations
 hmir suggest
-
-# Start the unified dashboard and inference node
-hmir start --dashboard
 ```
 
-### 2. REST API Integration
-
-HMIR exposes an OpenAI-compatible endpoint at `localhost:8080/v1/chat/completions`.
+### 2. Pull a compatible model
 
 ```bash
-curl http://localhost:8080/v1/chat/completions \
+# Intel NPU-friendly OpenVINO pack
+hmir pull qwen2.5-1.5b-ov
+
+# Cross-platform GGUF fallback
+hmir pull llama3.2-3b
+```
+
+### 3. Start the local API
+
+```bash
+hmir start --port 8080 --model qwen2.5-1.5b-ov
+```
+
+### 3a. Start the native dashboard with built-in chat
+
+```bash
+hmir start --dashboard --model qwen2.5-1.5b-ov
+```
+
+### 4. Call the OpenAI-compatible endpoint
+
+```bash
+curl http://127.0.0.1:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "messages": [{"role": "user", "content": "Analyze hardware status."}],
+    "messages": [{"role": "user", "content": "Summarize the active hardware route."}],
     "stream": true
   }'
 ```
 
-### 3. Local Development (Source Build)
+## How It Works
 
-If you are contributing to the core, install from your local clone:
+1. HMIR probes the machine and discovers available `NPU`, `GPU`, and `CPU` targets.
+2. The model manager resolves which backends can actually load the requested model package.
+3. The scheduler scores candidate plans using device capability, memory headroom, queue depth, and latency intent.
+4. The execution engine runs the highest-scoring plan.
+5. If a device is unavailable or overloaded, HMIR retries on the next fallback path.
+6. Logs and telemetry show which backend and device handled the request.
 
-```powershell
-.\scripts\install.ps1 -Local
+## Dashboard
+
+The desktop dashboard is intended to be the main local control plane, not a launcher that immediately pushes you back to the browser.
+
+- native chat is built in
+- model mount and unmount controls are built in
+- download and model-folder access are built in
+- integration access details are built in
+- advanced log viewing is built in
+
+If you want the browserless flow, use:
+
+```bash
+hmir start --dashboard
 ```
 
----
+If you want a headless API for editors and agents, use:
 
-## 📂 Repository Structure
+```bash
+hmir start --no-browser
+```
 
-- 🦀 `hmir-api`: High-performance Rust server orchestrating inference and telemetry.
-- 📦 `hmir-core`: Shared hardware abstractions and cognitive utility substrate.
-- 🐍 `scripts`: NPU Service logic and cross-platform installation bridges.
-- 🐳 `deploy`: Multi-stage Docker templates for production distribution.
+## Integrations
 
----
+HMIR is designed to act like a local OpenAI-compatible provider.
 
-## 🤝 Contributing
+```bash
+hmir integrations
+```
 
-We welcome Elite developers to harden the HMIR core. Please see our [CONTRIBUTING.md](file:///c:/Users/silve/OneDrive/Desktop/HMIR/CONTRIBUTING.md) for architectural guidelines and submission standards.
+That command prints the base URL, API key suggestion, and model hints you can reuse in tools such as:
 
----
+- Cursor
+- VS Code extensions that support custom OpenAI endpoints
+- OpenClaw
+- OpenJarvis
+- Antigravity
+- Open WebUI
+- custom Python and JavaScript OpenAI SDK clients
 
-**HMIR Elite** • Built with ❤️ for the future of local heterogenous compute.
+Default local API values:
+
+- Base URL: `http://127.0.0.1:8080/v1`
+- API key: `hmir-local`
+
+## Logs
+
+Use the CLI log tools for quick inspection:
+
+```bash
+hmir logs --tail 200
+hmir logs --grep ERROR
+hmir logs --follow
+```
+
+## MVP Scope
+
+The intended MVP is deliberately focused:
+
+- automatic hardware detection
+- `NPU -> GPU -> CPU` fallback
+- OpenVINO + llama.cpp backend support
+- simple CLI + API server
+- model auto-loading
+- device-selection logs
+
+Not in the first cut:
+
+- distributed multi-node serving
+- complex tensor-parallel orchestration
+- learned routing models
+
+## Roadmap
+
+- `v0.1`: hardware detection, backend registry, model manifests
+- `v0.2`: NPU-first scheduler and transparent fallback
+- `v0.3`: request-level load balancing and better warm-model residency
+- `v0.4`: speculative draft plans and adaptive scoring
+- `v1.0`: stable cross-platform serving runtime with clear backend contracts
+
+## Repository Layout
+
+- `hmir-api`: API server and streaming surface
+- `hmir-core`: orchestration, scheduler, memory, telemetry
+- `hmir-hardware-prober`: cross-platform hardware detection
+- `hmir-sys`: low-level backend bindings and adapters
+- `deploy/packaging/hmir-cli`: CLI entrypoint
+- `scripts`: installation and transitional backend helpers
+
+## Contributing
+
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), then read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the target system design and scheduler direction.

@@ -51,6 +51,68 @@ pub struct SwitchModelPayload {
     pub name: String,
 }
 
+fn data_root() -> PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("hmir")
+}
+
+fn logs_dir() -> PathBuf {
+    data_root().join("logs")
+}
+
+fn models_dir() -> PathBuf {
+    data_root().join("models")
+}
+
+fn resolve_script_path(script_name: &str) -> PathBuf {
+    let candidates = [
+        std::env::current_dir()
+            .unwrap_or_default()
+            .join("scripts")
+            .join(script_name),
+        std::env::current_exe()
+            .unwrap_or_default()
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("scripts")
+            .join(script_name),
+    ];
+
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .unwrap_or_else(|| PathBuf::from(script_name))
+}
+
+fn resolve_python_command() -> String {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|mut path| {
+            path.pop();
+            Some(path)
+        })
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let candidates = [
+        cwd.join(".venv").join("Scripts").join("python.exe"),
+        cwd.join(".venv").join("bin").join("python"),
+        exe_dir.join(".venv").join("Scripts").join("python.exe"),
+        exe_dir.join(".venv").join("bin").join("python"),
+    ];
+
+    if let Some(path) = candidates.into_iter().find(|path| path.exists()) {
+        return path.to_string_lossy().to_string();
+    }
+
+    if cfg!(target_os = "windows") {
+        "python".to_string()
+    } else {
+        "python3".to_string()
+    }
+}
+
 fn log_event(msg: &str) {
     let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
     let formatted = format!("[{}] {}", timestamp, msg);
@@ -67,11 +129,7 @@ fn log_event(msg: &str) {
     let _ = LOG_BUS.send(formatted.clone());
 
     // 3. Persistent Log
-    let mut path = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    path.push("hmir");
-    path.push("logs");
+    let mut path = logs_dir();
     let _ = std::fs::create_dir_all(&path);
     path.push("api.log");
 
@@ -82,11 +140,7 @@ fn log_event(msg: &str) {
 
 pub async fn list_installed_models() -> Json<Vec<String>> {
     let mut models = Vec::new();
-    let mut path = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    path.push("hmir");
-    path.push("models");
+    let path = models_dir();
 
     if let Ok(entries) = std::fs::read_dir(&path) {
         for entry in entries.flatten() {
@@ -185,20 +239,8 @@ pub async fn download_model(
             progress: 0.0,
         });
 
-        let mut script_path = std::env::current_dir().unwrap_or_default();
-        script_path.push("scripts");
-        script_path.push("download_npu_model.py");
-
-        let venv_python = std::env::current_dir()
-            .unwrap_or_default()
-            .join(".venv")
-            .join("Scripts")
-            .join("python.exe");
-        let python_bin = if venv_python.exists() {
-            venv_python.to_string_lossy().to_string()
-        } else {
-            "python".to_string()
-        };
+        let script_path = resolve_script_path("download_npu_model.py");
+        let python_bin = resolve_python_command();
 
         let mut child = tokio::process::Command::new(python_bin)
             .arg(script_path)
@@ -783,25 +825,11 @@ async fn main() {
 
     // -- Auto-spawn NPU Worker --
     log_event("[BOOT] Launching NPU Inference Worker (port 8089)...");
-    let worker_script = std::env::current_dir()
-        .unwrap_or_default()
-        .join("scripts")
-        .join("hmir_npu_service.py");
+    let worker_script = resolve_script_path("hmir_npu_service.py");
 
     if worker_script.exists() {
-        // Try project venv first, then system python
-        let venv_python = std::env::current_dir()
-            .unwrap_or_default()
-            .join(".venv")
-            .join("Scripts")
-            .join("python.exe");
-        let python_bin = if venv_python.exists() {
-            log_event(&format!("  Using venv Python: {}", venv_python.display()));
-            venv_python.to_string_lossy().to_string()
-        } else {
-            log_event("  Using system Python");
-            "python".to_string()
-        };
+        let python_bin = resolve_python_command();
+        log_event(&format!("  Using Python runtime: {}", python_bin));
 
         match std::process::Command::new(&python_bin)
             .arg(&worker_script)

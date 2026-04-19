@@ -2049,6 +2049,7 @@ dependencies = [
  "async-stream",
  "axum",
  "chrono",
+ "dirs",
  "futures",
  "hmir-core",
  "hmir-hardware-prober",

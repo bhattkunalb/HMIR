@@ -1,140 +1,76 @@
 #!/usr/bin/env bash
-# scripts/install.sh
-# One-click HMIR installer for Linux/macOS
-# Usage: curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | sh
+# One-click HMIR installer for Linux and macOS
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | bash
 
 set -euo pipefail
 
-# Configuration
 REPO="bhattkunalb/HMIR"
 RELEASE_ENDPOINT="https://api.github.com/repos/${REPO}/releases/latest"
 INSTALL_DIR="${HOME}/.local/bin"
-DASHBOARD_PORT=3001
-API_PORT=8080
 LOCAL_BUILD=false
 
-# Parse arguments
 for arg in "$@"; do
-  case $arg in
+  case "$arg" in
     --local) LOCAL_BUILD=true ;;
   esac
 done
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
-# Check prerequisites
 check_prereqs() {
-  if ! command -v curl >/dev/null 2>&1; then
-    log_error "curl is required but not installed. Please install curl and retry."
-    exit 1
-  fi
-  
-  if ! command -v tar >/dev/null 2>&1; then
-    log_error "tar is required but not installed."
-    exit 1
-  fi
+  for tool in curl tar git; do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
+      log_error "${tool} is required but not installed."
+      exit 1
+    fi
+  done
 }
 
-# Detect OS and architecture
 detect_platform() {
   local os arch
   os=$(uname -s | tr '[:upper:]' '[:lower:]')
   arch=$(uname -m)
-  
-  case "$os" in
-    darwin) os="apple-darwin" ;;
+
+  case "${os}" in
     linux) os="unknown-linux-gnu" ;;
-    *) log_error "Unsupported OS: $os"; exit 1 ;;
+    darwin) os="apple-darwin" ;;
+    *) log_error "Unsupported OS: ${os}"; exit 1 ;;
   esac
-  
-  case "$arch" in
+
+  case "${arch}" in
     x86_64|amd64) arch="x86_64" ;;
     aarch64|arm64) arch="aarch64" ;;
-    *) log_error "Unsupported architecture: $arch"; exit 1 ;;
+    *) log_error "Unsupported architecture: ${arch}"; exit 1 ;;
   esac
-  
+
   echo "${arch}-${os}"
 }
 
-# Download and install binaries
-install_binaries() {
-  local platform=$1
-  local tmp_dir
-  tmp_dir=$(mktemp -d)
-  
-  log_info "Fetching latest release from ${REPO}..."
-  
-  # Get latest release tag
-  local tag
-  tag=$(curl -fsSL "${RELEASE_ENDPOINT}" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
-  
-  if [[ -z "$tag" ]] || [[ "$LOCAL_BUILD" == "true" ]]; then
-    if [[ "$LOCAL_BUILD" == "true" ]]; then
-      log_info "Local install requested (--local flag detected)."
-    else
-      log_warn "No releases found yet. Falling back to source build..."
-    fi
-    build_from_source
-    return
-  fi
-  
-  log_info "Installing HMIR ${tag} for ${platform}..."
-  
-  local asset_name="hmir-${tag}-${platform}.tar.gz"
-  local download_url="https://github.com/${REPO}/releases/download/${tag}/${asset_name}"
-  
-  # Download and extract
-  if ! curl -fsSL -o "${tmp_dir}/${asset_name}" "${download_url}"; then
-    log_error "Failed to download ${asset_name}. It may not be built for your platform yet."
-    log_warn "Fallback: building from source (requires Rust toolchain)..."
-    build_from_source
-    return
-  fi
-  
-  tar -xzf "${tmp_dir}/${asset_name}" -C "${tmp_dir}"
-  
-  # Create install directory
-  mkdir -p "${INSTALL_DIR}"
-  
-  # Install binaries
-  cp "${tmp_dir}"/hmir-* "${INSTALL_DIR}/" 2>/dev/null || true
-  chmod +x "${INSTALL_DIR}"/hmir-*
-  
-  # Cleanup
-  rm -rf "${tmp_dir}"
-  
-  log_info "Binaries installed to ${INSTALL_DIR}"
-}
-
-# Fallback: build from source
+build_from_source() {
   log_warn "Building HMIR from source (this may take 10-30 minutes)..."
-  
+
   if ! command -v cargo >/dev/null 2>&1; then
-    log_error "Rust toolchain required for source build. Install via: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    log_error "Rust toolchain required for source build. Install with https://rustup.rs/"
     exit 1
   fi
-  
-  local source_dir
+
+  local source_dir=""
   local tmp_repo=""
 
-  # Detect local source
-  if [[ "$LOCAL_BUILD" == "true" ]] || [[ -f "./Cargo.toml" ]] || [[ -f "../Cargo.toml" ]]; then
+  if [[ "${LOCAL_BUILD}" == "true" ]] || [[ -f "./Cargo.toml" ]] || [[ -f "../Cargo.toml" ]]; then
     if [[ -f "./Cargo.toml" ]]; then
       source_dir=$(pwd)
-    elif [[ -f "../Cargo.toml" ]]; then
-      source_dir=$(realpath ..)
+    else
+      source_dir=$(cd .. && pwd)
     fi
-  fi
-
-  if [[ -n "${source_dir:-}" ]]; then
     log_info "Detected HMIR source at ${source_dir}. Building local version..."
   else
     tmp_repo=$(mktemp -d)
@@ -143,80 +79,121 @@ install_binaries() {
     source_dir="${tmp_repo}"
   fi
 
-  cd "${source_dir}"
-  
-  cargo build --release --workspace --features dashboard,openai-api,hardware-prober
-  
-  mkdir -p "${INSTALL_DIR}"
-  cp target/release/hmir target/release/hmir-dashboard "${INSTALL_DIR}/" 2>/dev/null || true
-  chmod +x "${INSTALL_DIR}"/hmir*
-  
+  (
+    cd "${source_dir}"
+    cargo build --release --workspace
+    mkdir -p "${INSTALL_DIR}"
+    cp target/release/hmir* "${INSTALL_DIR}/" 2>/dev/null || true
+    chmod +x "${INSTALL_DIR}"/hmir* 2>/dev/null || true
+
+    if [[ -d scripts ]]; then
+      mkdir -p "${INSTALL_DIR}/scripts"
+      cp -R scripts/. "${INSTALL_DIR}/scripts/"
+    fi
+  )
+
   if [[ -n "${tmp_repo}" ]]; then
     rm -rf "${tmp_repo}"
   fi
-  
+
   log_info "Build complete. Binaries installed to ${INSTALL_DIR}"
 }
 
-# Update PATH if needed
+install_binaries() {
+  local platform=$1
+  local tmp_dir
+  local tag
+  local asset_name
+  local download_url
+
+  if [[ "${LOCAL_BUILD}" == "true" ]]; then
+    build_from_source
+    return
+  fi
+
+  tmp_dir=$(mktemp -d)
+  log_info "Fetching latest release from ${REPO}..."
+  tag=$(curl -fsSL "${RELEASE_ENDPOINT}" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4 || true)
+
+  if [[ -z "${tag}" ]]; then
+    log_warn "No release found. Falling back to source build."
+    rm -rf "${tmp_dir}"
+    build_from_source
+    return
+  fi
+
+  asset_name="hmir-${tag}-${platform}.tar.gz"
+  download_url="https://github.com/${REPO}/releases/download/${tag}/${asset_name}"
+  log_info "Installing HMIR ${tag} for ${platform}..."
+
+  if ! curl -fsSL -o "${tmp_dir}/${asset_name}" "${download_url}"; then
+    log_warn "Prebuilt asset not found for ${platform}. Falling back to source build."
+    rm -rf "${tmp_dir}"
+    build_from_source
+    return
+  fi
+
+  tar -xzf "${tmp_dir}/${asset_name}" -C "${tmp_dir}"
+  mkdir -p "${INSTALL_DIR}"
+  cp "${tmp_dir}"/hmir* "${INSTALL_DIR}/" 2>/dev/null || true
+  chmod +x "${INSTALL_DIR}"/hmir* 2>/dev/null || true
+  rm -rf "${tmp_dir}"
+
+  log_info "Binaries installed to ${INSTALL_DIR}"
+}
+
 update_path() {
-  if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
-    log_warn "${INSTALL_DIR} is not in your PATH."
-    
-    local shell_rc
-    case "$SHELL" in
-      */zsh) shell_rc="${HOME}/.zshrc" ;;
-      */bash) shell_rc="${HOME}/.bashrc" ;;
-      *) shell_rc="${HOME}/.profile" ;;
-    esac
-    
-    echo "" >> "${shell_rc}"
-    echo "# HMIR installation" >> "${shell_rc}"
-    echo "export PATH=\"${INSTALL_DIR}:\$PATH\"" >> "${shell_rc}"
-    
-    log_info "Added ${INSTALL_DIR} to ${shell_rc}. Restart your shell or run: source ${shell_rc}"
+  if [[ ":$PATH:" == *":${INSTALL_DIR}:"* ]]; then
+    return
   fi
+
+  local shell_rc
+  case "${SHELL:-}" in
+    */zsh) shell_rc="${HOME}/.zshrc" ;;
+    */bash) shell_rc="${HOME}/.bashrc" ;;
+    *) shell_rc="${HOME}/.profile" ;;
+  esac
+
+  {
+    echo
+    echo "# HMIR installation"
+    echo "export PATH=\"${INSTALL_DIR}:\$PATH\""
+  } >> "${shell_rc}"
+
+  log_info "Added ${INSTALL_DIR} to ${shell_rc}"
 }
 
-# Post-install verification
 verify_install() {
-  log_info "Verifying installation..."
-  
+  export PATH="${INSTALL_DIR}:${PATH}"
   if command -v hmir >/dev/null 2>&1; then
-    local version
-    version=$(hmir --version 2>/dev/null || echo "unknown")
-    log_info "✅ HMIR installed: ${version}"
+    log_info "HMIR installed: $(hmir --version 2>/dev/null || echo unknown)"
   else
-    log_warn "⚠️  hmir command not found. Ensure ${INSTALL_DIR} is in your PATH."
+    log_warn "hmir was installed, but your shell may need to be restarted."
   fi
 }
 
-# Main execution
 main() {
-  log_info "🚀 HMIR Installer"
+  log_info "HMIR installer"
   log_info "Repository: https://github.com/${REPO}"
-  
+  log_info "HMIR auto-detects NPU, GPU, and CPU hardware after install."
+
   check_prereqs
-  
   local platform
   platform=$(detect_platform)
   log_info "Detected platform: ${platform}"
-  
+
   install_binaries "${platform}"
   update_path
   verify_install
-  
-  echo ""
-  log_info "🎉 Installation complete!"
-  echo ""
+
+  echo
+  log_info "Installation complete."
   echo "Next steps:"
-  echo "  1. Restart your shell or run: source ~/.bashrc  # or ~/.zshrc"
-  echo "  2. Get model recommendations: hmir suggest"
-  echo "  3. Start the daemon: hmir start --dashboard"
-  echo "  4. Open dashboard: http://localhost:${DASHBOARD_PORT}"
-  echo "  5. API endpoint: http://localhost:${API_PORT}/v1/chat/completions"
-  echo ""
-  echo "Documentation: https://github.com/${REPO}/README.md"
+  echo "  1. Restart your shell or source your rc file."
+  echo "  2. Run: hmir suggest"
+  echo "  3. Start native dashboard: hmir start --dashboard"
+  echo "  4. Headless API mode: hmir start --no-browser"
+  echo "  5. Integration help: hmir integrations"
 }
 
 main "$@"

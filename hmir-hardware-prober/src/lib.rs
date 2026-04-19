@@ -145,9 +145,16 @@ pub mod os_polling {
              }
         }
 
+        let gpu_util = if let Ok(output) = std::process::Command::new("powershell")
+            .args(["-Command", "Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine | Where-Object { $_.Name -match '3D|Graphics' } | Measure-Object -Property UtilizationPercentage -Average | Select-Object -ExpandProperty Average"])
+            .output()
+        {
+            String::from_utf8_lossy(&output.stdout).trim().replace(',', ".").parse::<f64>().unwrap_or(0.0)
+        } else { 0.0 };
+
         let npu_util = if npu_active {
             if let Ok(output) = std::process::Command::new("powershell")
-                .args(["-Command", "Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine | Where-Object { $_.Name -match 'Compute|NPU|VPU|Accelerator' } | Measure-Object -Property UtilizationPercentage -Sum | Select-Object -ExpandProperty Sum"])
+                .args(["-Command", "Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine | Where-Object { $_.Name -match 'Compute|NPU|VPU|Accelerator|Neural' } | Measure-Object -Property UtilizationPercentage -Sum | Select-Object -ExpandProperty Sum"])
                 .output()
             {
                 let raw = String::from_utf8_lossy(&output.stdout).trim().replace(',', ".").parse::<f64>().unwrap_or(0.0);
@@ -184,7 +191,7 @@ pub mod os_polling {
             cpu_threads,
             cpu_l3_cache_mb: cpu_l3,
             gpu_name,
-            gpu_util_pct: 0.0,
+            gpu_util_pct: gpu_util,
             gpu_driver,
             npu_name,
             npu_util_pct: npu_util,

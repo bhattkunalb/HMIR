@@ -458,12 +458,13 @@ function Main {
     Write-Host "Next steps:" -ForegroundColor $ColorInfo
     Write-Host "  1. Restart PowerShell or run: `$env:PATH = '$InstallPath;' + `$env:PATH"
     Write-Host "  2. Get model recommendations: hmir suggest"
-    Write-Host "  3. Start the system: hmir start --dashboard"
-    Write-Host "  4. Open dashboard: http://localhost:`$API_PORT"
-    Write-Host "  5. API endpoint: http://localhost:$API_PORT/v1/chat/completions"
+    Write-Host "  3. Start native dashboard: hmir start --dashboard"
+    Write-Host "  4. Start headless API only: hmir start --no-browser"
+    Write-Host "  5. Integration help: hmir integrations"
+    Write-Host "  6. API endpoint: http://localhost:$API_PORT/v1/chat/completions"
     Write-Host ""
     Write-Host "Documentation: https://github.com/$REPO/blob/main/README.md" -ForegroundColor $ColorInfo
-    Write-Host "Troubleshooting: hmir logs --level debug"
+    Write-Host "Troubleshooting: hmir logs --tail 200"
 }
 
 # Run main

@@ -2,9 +2,17 @@ use clap::{Parser, Subcommand};
 // cSpell:ignore USERPROFILE, WINDOWTITLE
 mod commands;
 
+const LONG_ABOUT: &str = "HMIR is a local heterogeneous inference runtime.\n\nIt exposes one OpenAI-compatible local API across NPU, GPU, and CPU so local apps and editors can use the same endpoint without manual device juggling.";
+
+const AFTER_HELP: &str = "Examples:\n  hmir suggest\n  hmir pull qwen2.5-1.5b-ov\n  hmir start --dashboard --model qwen2.5-1.5b-ov\n  hmir start --no-browser --port 8080\n  hmir integrations --model llama3.2-3b\n  hmir logs --tail 200 --grep ERROR\n\nOpenAI-compatible clients should use:\n  Base URL: http://127.0.0.1:8080/v1\n  API Key : hmir-local";
+
 #[derive(Parser)]
 #[command(name = "hmir")]
-#[command(about = "HMIR: Heterogeneous Model Inference Runtime", long_about = None)]
+#[command(version)]
+#[command(propagate_version = true)]
+#[command(about = "HMIR: Heterogeneous Model Inference Runtime")]
+#[command(long_about = LONG_ABOUT)]
+#[command(after_help = AFTER_HELP)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -24,24 +32,53 @@ enum Commands {
         model: String,
     },
     /// Start the inference daemon and optional dashboard
+    #[command(visible_alias = "serve")]
     Start {
         /// The port to listen on for the API
         #[arg(short, long, default_value = "8080")]
         port: u16,
-        /// Launch the native telemetry dashboard
+        /// Launch the native dashboard with built-in chat, controls, integrations, and logs
         #[arg(short, long)]
         dashboard: bool,
         /// The model to load on startup
         #[arg(short, long)]
         model: Option<String>,
+        /// Do not open the browser automatically
+        #[arg(long)]
+        no_browser: bool,
     },
     /// Stop all running HMIR instances
     Stop,
-    /// Launch the native telemetry dashboard directly
+    /// Launch the native dashboard directly
+    #[command(visible_alias = "ui")]
     Dashboard {
         /// The port to connect to the API on
         #[arg(short, long, default_value = "8080")]
         port: u16,
+    },
+    /// Show OpenAI-compatible integration settings for editors and local apps
+    Integrations {
+        /// The API port your HMIR runtime is listening on
+        #[arg(short, long, default_value = "8080")]
+        port: u16,
+        /// Suggested model name to display in the examples
+        #[arg(short, long)]
+        model: Option<String>,
+    },
+    /// Inspect local HMIR logs
+    Logs {
+        /// Number of lines to show from the end of each log
+        #[arg(long, default_value = "120")]
+        tail: usize,
+        /// Filter log lines that contain this text
+        #[arg(long)]
+        grep: Option<String>,
+        /// Follow log updates
+        #[arg(short, long)]
+        follow: bool,
+        /// Print the log directory and exit
+        #[arg(long)]
+        dir: bool,
     },
     /// Uninstall HMIR ELITE and purge all runtime data
     Uninstall,
@@ -65,19 +102,29 @@ async fn main() {
             port,
             dashboard,
             model,
+            no_browser,
         } => {
             println!("🚀 Launching HMIR ELITE Compute Hub");
-            commands::start::start_daemon(port, dashboard, model).await;
+            commands::start::start_daemon(port, dashboard, model, no_browser).await;
         }
         Commands::Stop => {
             stop_all_instances();
             println!("✅ HMIR ELITE specialized resources released.");
         }
         Commands::Dashboard { port } => {
-            println!("🖥️  Launching HMIR ELITE Dashboard...");
-            // We reuse the start_daemon logic but specify dashboard=true
-            // Optimization: if API is already running, start_daemon should handle it (it does via health checks)
-            commands::start::start_daemon(port, true, None).await;
+            println!("🖥️  Launching HMIR Dashboard...");
+            commands::start::launch_dashboard(port).await;
+        }
+        Commands::Integrations { port, model } => {
+            commands::integrations::print_integrations(port, model.as_deref());
+        }
+        Commands::Logs {
+            tail,
+            grep,
+            follow,
+            dir,
+        } => {
+            commands::logs::run_logs(tail, grep.as_deref(), follow, dir);
         }
         Commands::Uninstall => {
             println!("🗑️  HMIR ELITE | COMMENCING FULL SYSTEM UNINSTALL");
@@ -107,25 +154,35 @@ async fn main() {
 
 fn stop_all_instances() {
     println!("🛑 HMIR ELITE | TERMINATING ALL COMPUTE INSTANCES");
-    println!("  [1/3] Closing Inference API...");
-    let _ = std::process::Command::new("taskkill")
-        .args(["/F", "/IM", "hmir-api.exe", "/T"])
-        .output();
+    if cfg!(target_os = "windows") {
+        println!("  [1/3] Closing Inference API...");
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "hmir-api.exe", "/T"])
+            .output();
 
-    println!("  [2/3] Closing Hardware Dashboard...");
-    let _ = std::process::Command::new("taskkill")
-        .args(["/F", "/IM", "hmir-dashboard.exe", "/T"])
-        .output();
+        println!("  [2/3] Closing Hardware Dashboard...");
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "hmir-dashboard.exe", "/T"])
+            .output();
 
-    println!("  [3/3] Deactivating NPU Bridges...");
-    // Kill any python processes matching the worker pattern
-    let _ = std::process::Command::new("taskkill")
-        .args([
-            "/F",
-            "/IM",
-            "python.exe",
-            "/FI",
-            "WINDOWTITLE eq HMIR_NPU_BRIDGE*",
-        ])
-        .output();
+        println!("  [3/3] Deactivating NPU Bridges...");
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "python.exe", "/T"])
+            .output();
+    } else {
+        println!("  [1/3] Closing Inference API...");
+        let _ = std::process::Command::new("pkill")
+            .args(["-f", "hmir-api"])
+            .output();
+
+        println!("  [2/3] Closing Hardware Dashboard...");
+        let _ = std::process::Command::new("pkill")
+            .args(["-f", "hmir-dashboard"])
+            .output();
+
+        println!("  [3/3] Deactivating NPU Bridges...");
+        let _ = std::process::Command::new("pkill")
+            .args(["-f", "hmir_npu_service.py"])
+            .output();
+    }
 }

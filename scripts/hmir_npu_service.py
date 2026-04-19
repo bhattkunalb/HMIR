@@ -44,21 +44,39 @@ async def handle_chat(request):
         )
         await response.prepare(request)
 
+        loop = asyncio.get_running_loop()
+        queue = asyncio.Queue()
+
         def streamer(sub_text):
-            chunk = {"choices": [{"delta": {"content": sub_text}}]}
-            asyncio.run_coroutine_threadsafe(
-                response.write(f"data: {json.dumps(chunk)}\n\n".encode("utf-8")),
-                asyncio.get_event_loop()
-            )
+            # Put token into the queue from the inference thread
+            loop.call_soon_threadsafe(queue.put_nowait, sub_text)
             return False
 
-        pipeline.generate(prompt, max_new_tokens=512, streamer=streamer)
+        # Run blocking inference in a background thread
+        async def run_inference():
+            try:
+                await asyncio.to_thread(pipeline.generate, prompt, max_new_tokens=512, streamer=streamer)
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None) # Signal end of stream
+
+        inference_task = asyncio.create_task(run_inference())
+
+        while True:
+            token = await queue.get()
+            if token is None:
+                break
+            
+            chunk = {"choices": [{"delta": {"content": token}}]}
+            await response.write(f"data: {json.dumps(chunk)}\n\n".encode("utf-8"))
+
         await response.write(b"data: [DONE]\n\n")
+        await inference_task
         return response
 
     except json.JSONDecodeError:
         return web.json_response({"error": "Invalid JSON"}, status=400)
-    except (RuntimeError, ValueError) as e:
+    except Exception as e:
+        print(f"ERROR IN CHAT: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 def check_health(_request):
