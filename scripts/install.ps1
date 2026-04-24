@@ -343,7 +343,7 @@ function Test-NPUDrivers {
     if ($SkipNPUCheck) { return $true }
     Write-Info "Checking for NPU hardware..."
     # Simple check for now to avoid nested blocks
-    $devices = Get-PnpDevice -Class 'ComputeAccelerator' -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' }
+    $devices = Get-PnpDevice -Class 'ComputeAccelerator' -ErrorAction SilentlyContinue
     if ($devices) {
         Write-Success "NPU hardware found."
         return $true

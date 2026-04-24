@@ -186,11 +186,11 @@ pub mod os_polling {
                         "try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:8089/health' -TimeoutSec 1; if ($r.status -eq 'GENERATING') { '95' } elseif ($r.status -eq 'READY') { '1' } else { '0' } } catch { '0' }"])
                     .output()
                 {
-                    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if raw == "95" {
+                    let raw = String::from_utf8_lossy(&output.stdout).trim();
+                    if raw.contains("95") {
                         // NPU is actively crunching tokens
                         util = 95.0 + (System::uptime() % 5) as f64; // Slight jitter for realism
-                    } else if raw == "1" {
+                    } else if raw.contains('1') {
                         // Worker is online and ready — minimal idle utilization
                         util = 0.5;
                     }
@@ -259,7 +259,7 @@ pub mod os_polling {
 
         // Check for ComputeAccelerator class (Intel AI Boost, Qualcomm)
         if let Ok(output) = std::process::Command::new("powershell")
-            .args(["-Command", "Get-PnpDevice -Class 'ComputeAccelerator' -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | Select-Object -ExpandProperty FriendlyName"])
+            .args(["-Command", "Get-PnpDevice -Class 'ComputeAccelerator' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FriendlyName"])
             .output()
         {
             let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
