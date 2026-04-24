@@ -658,8 +658,8 @@ async fn main() {
                                     .arg(&worker_script_watch)
                                     .current_dir(&project_root_watch)
                                     .env("HMIR_MODEL_PATH", &model_path_watch)
-                                    .stdout(Stdio::null())
-                                    .stderr(Stdio::null())
+                                    .stdout(Stdio::inherit())
+                                    .stderr(Stdio::inherit())
                                     .spawn();
                                 
                                 // Wait a bit for it to come up

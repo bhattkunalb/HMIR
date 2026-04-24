@@ -43,6 +43,9 @@ enum Commands {
         /// The model to load on startup
         #[arg(short, long)]
         model: Option<String>,
+        /// Do not launch any UI (native dashboard or browser)
+        #[arg(long, visible_alias = "headless")]
+        no_browser: bool,
     },
     /// Stop all running HMIR instances
     Stop,
@@ -99,9 +102,10 @@ async fn main() {
             port,
             web,
             model,
+            no_browser,
         } => {
             println!("🚀 Launching HMIR ELITE Compute Hub");
-            commands::start::start_daemon(port, web, model).await;
+            commands::start::start_daemon(port, web, model, no_browser).await;
         }
         Commands::Stop => {
             stop_all_instances();

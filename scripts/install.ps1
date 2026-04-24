@@ -279,8 +279,12 @@ function Build-FromSource {
             New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
         }
 
-        # Copy all hmir-* binaries found in target/release
+        # Copy all hmir*.exe binaries (including hmir.exe and hmir-api.exe)
         $binaries = Get-ChildItem "target\release\hmir*.exe" -ErrorAction SilentlyContinue
+        if ($binaries.Count -eq 0) {
+            # Fallback specifically for hmir.exe if the wildcard fails
+            $binaries = Get-ChildItem "target\release\hmir.exe" -ErrorAction SilentlyContinue
+        }
         if ($binaries) {
             foreach ($bin in $binaries) {
                 Copy-Item $bin.FullName -Destination $InstallPath -Force
@@ -336,14 +340,16 @@ function Update-UserPath {
 # NPU Driver Helper (Optional)
 # ========================================
 function Test-NPUDrivers {
-    if ($SkipNPUCheck) { return }
+    if ($SkipNPUCheck) { return $true }
     Write-Info "Checking for NPU hardware..."
     # Simple check for now to avoid nested blocks
-    $devices = Get-PnpDevice -Class 'ComputeAccelerator' -ErrorAction SilentlyContinue
+    $devices = Get-PnpDevice -Class 'ComputeAccelerator' -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' }
     if ($devices) {
         Write-Success "NPU hardware found."
+        return $true
     } else {
         Write-Warn "No dedicated NPU hardware detected."
+        return $false
     }
 }
 
@@ -415,13 +421,19 @@ function Main {
         Write-Warn "NPU not detected or drivers inactive. AI inference will fall back to CPU."
     }
     
+    # Verification
+    if (-not (Test-Path "$InstallPath\hmir.exe")) {
+        Write-Error "CRITICAL: hmir.exe not found in $InstallPath after installation."
+        exit 1
+    }
+    
     Test-Installation
 
     Write-Host ""
     Write-Success " Installation complete!"
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor $ColorInfo
-    Write-Host "  1. Restart PowerShell or run: `$env:PATH = $InstallPath; + `$env:PATH"
+    Write-Host "  1. Restart PowerShell or run: `$env:PATH = '$InstallPath;' + `$env:PATH"
     Write-Host "  2. Get model recommendations: hmir suggest"
     Write-Host "  3. Start native dashboard: hmir start"
     Write-Host "  4. Start legacy web API UI: hmir start --web"

@@ -129,7 +129,9 @@ async def handle_chat(request):
         queue = asyncio.Queue()
 
         def streamer(sub_text):
-            loop.call_soon_threadsafe(queue.put_nowait, sub_text)
+            if sub_text:
+                # print(f".", end="", flush=True) # Too noisy for logs?
+                loop.call_soon_threadsafe(queue.put_nowait, sub_text)
             return False
 
         async def run_inference(pipe_ref):
@@ -175,7 +177,7 @@ async def handle_chat(request):
         except Exception:
             return web.Response(status=500)
 
-async def check_health(_request):
+def check_health(_request):
     """Health check endpoint."""
     return web.json_response({
         "status": service_status,
@@ -193,7 +195,7 @@ def main():
     port = args.port
 
     print("=" * 60, flush=True)
-    print(f"  HMIR NPU Inference Worker", flush=True)
+    print("  HMIR NPU Inference Worker", flush=True)
     print(f"  Port: {port}", flush=True)
     print(f"  Python: {sys.executable}", flush=True)
     print(f"  CWD: {os.getcwd()}", flush=True)

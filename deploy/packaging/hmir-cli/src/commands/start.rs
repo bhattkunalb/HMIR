@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::process::Command;
 
-pub async fn start_daemon(port: u16, web: bool, model: Option<String>) {
+pub async fn start_daemon(port: u16, web: bool, model: Option<String>, no_browser: bool) {
     let bin_dir = current_bin_dir();
 
     println!("🚀 HMIR ELITE | INITIALIZING INFERENCE NODE");
@@ -70,7 +70,7 @@ pub async fn start_daemon(port: u16, web: bool, model: Option<String>) {
     }
 
     // 3. Start Native Dashboard
-    if !web {
+    if !web && !no_browser {
         print!("🖥️ Launching Native Dashboard... ");
         let dash_path = bin_dir.join(executable_name("hmir-dashboard"));
         match Command::new(&dash_path)
@@ -84,7 +84,7 @@ pub async fn start_daemon(port: u16, web: bool, model: Option<String>) {
 
     // 4. Auto-Open Web Portal only for browser-first flow
     let unified_url = format!("http://127.0.0.1:{}", port);
-    if web {
+    if web && !no_browser {
         println!("🌐 Auto-opening Web Console: {}", unified_url);
         tokio::time::sleep(Duration::from_secs(2)).await;
         if let Err(e) = webbrowser::open(&unified_url) {
