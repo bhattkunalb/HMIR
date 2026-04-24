@@ -423,7 +423,6 @@ function Test-Installation {
             Write-Info "Probing hardware (first run may take 10s)..."
             $probe = hmir suggest --strategy latency 2>&1 | Select-Object -First 10
             $probe | ForEach-Object { Write-Host "  $_" }
-            
         } catch {
             Write-Warn "hmir command found but execution failed: $_"
         }

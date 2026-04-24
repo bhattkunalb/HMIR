@@ -11,7 +11,7 @@ HMIR is a heterogeneous local inference runtime for Windows, Linux, and macOS. I
 If Windows Task Manager shows **0% NPU** usage while you are chatting:
 
 1. **Check HMIR Dashboard**: The HMIR Dashboard (native and web) tracks the internal engine state. If the dashboard shows high NPU utilization, the NPU is active.
-2. **Task Manager Limitation**: Windows Task Manager often fails to capture bursty OpenVINO GenAI workloads because the NPU execution happens in micro-bursts that are faster than the Task Manager polling rate.
+2. **Task Manager Limitation**: Windows Task Manager often fails to capture high-frequency burst OpenVINO GenAI workloads because the NPU execution happens in micro-bursts that are faster than the Task Manager polling rate.
 3. **Model Compatibility**: Ensure you are using a `-ov` (OpenVINO) model. GGUF models run on CPU/GPU via llama.cpp and will not utilize the NPU.
 4. **NPU Drivers**: Ensure you have the latest Intel NPU drivers (version 31.0.100.xxxx or higher).
 
