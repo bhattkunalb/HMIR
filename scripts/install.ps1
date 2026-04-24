@@ -3,9 +3,6 @@
 # Usage: irm https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.ps1 | iex
 # Note: Run PowerShell as Administrator for NPU driver access (optional)
 
-# Set execution policy for the current session to avoid SecurityError on sub-scripts
-Set-ExecutionPolicy Bypass -Scope Process -Force
-
 param(
     [switch]$DryRun,
     [switch]$SkipNPUCheck,
@@ -13,11 +10,14 @@ param(
     [string]$InstallPath = "$env:USERPROFILE\.hmir"
 )
 
+# Set execution policy for the current session to avoid SecurityError on sub-scripts
+Set-ExecutionPolicy Bypass -Scope Process -Force
+
 # ========================================
 # Configuration & Constants
 # ========================================
 $REPO = "bhattkunalb/HMIR"
-$BUILD_TIMESTAMP = "2026-04-24-17:53" # Cache buster
+$BUILD_TIMESTAMP = "2026-04-24-18:03" # Cache buster
 $RELEASE_ENDPOINT = "https://api.github.com/repos/$REPO/releases/latest"
 $API_PORT = 8080
 $MIN_WINDOWS_BUILD = 19041  # Windows 10 20H2
