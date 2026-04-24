@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HMIR Elite — Inference Console</title>
+  <meta name="description" content="HMIR Elite local inference dashboard — NPU-accelerated LLM serving with real-time telemetry">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>/* HMIR_CSS_PLACEHOLDER */</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">⚡ <span>HMIR</span> Elite</div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <span style="font-size:12px;color:var(--text-dim)" id="uptime-val">0h 0m 0s</span>
+    <div class="status-badge" id="sys-status">
+      <span class="status-dot"></span>
+      <span class="status-text">CONNECTING</span>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="nav-tabs">
+  <div class="nav-tab active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</div>
+  <div class="nav-tab" data-tab="chat" onclick="switchTab('chat')">💬 Chat</div>
+  <div class="nav-tab" data-tab="models" onclick="switchTab('models')">🧠 Models</div>
+  <div class="nav-tab" data-tab="logs" onclick="switchTab('logs')">📋 Logs</div>
+  <div class="nav-tab" data-tab="connect" onclick="switchTab('connect')">🔗 Connect</div>
+</div>
+
+<!-- Tab: Overview -->
+<div class="main tab-content" id="tab-overview">
+  <!-- Hardware Gauges -->
+  <div class="grid-3" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">CPU Utilization</div>
+      <div class="gauge-container">
+        <div class="gauge-ring" id="g-cpu">
+          <svg viewBox="0 0 60 60"><circle class="bg" cx="30" cy="30" r="27"/><circle class="fg" cx="30" cy="30" r="27" stroke-dasharray="169.6" stroke-dashoffset="169.6"/></svg>
+          <div class="gauge-value">0%</div>
+        </div>
+        <div><div class="gauge-label" id="cpu-name">—</div><div class="gauge-sub" id="cpu-temp">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">GPU Utilization</div>
+      <div class="gauge-container">
+        <div class="gauge-ring" id="g-gpu">
+          <svg viewBox="0 0 60 60"><circle class="bg" cx="30" cy="30" r="27"/><circle class="fg" cx="30" cy="30" r="27" stroke-dasharray="169.6" stroke-dashoffset="169.6"/></svg>
+          <div class="gauge-value">0%</div>
+        </div>
+        <div><div class="gauge-label" id="gpu-name">—</div><div class="gauge-sub" id="gpu-temp">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">NPU Utilization</div>
+      <div class="gauge-container">
+        <div class="gauge-ring" id="g-npu">
+          <svg viewBox="0 0 60 60"><circle class="bg" cx="30" cy="30" r="27"/><circle class="fg" cx="30" cy="30" r="27" stroke-dasharray="169.6" stroke-dashoffset="169.6" style="stroke:#22c55e"/></svg>
+          <div class="gauge-value">0%</div>
+        </div>
+        <div><div class="gauge-label" id="npu-name">—</div><div class="gauge-sub">Intel AI Boost</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Info -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">Memory</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:13px">RAM</span><span id="ram-info" style="font-size:13px;color:var(--text-dim)">—</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="pb-ram" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:12px;margin-bottom:4px">
+        <span style="font-size:13px">VRAM</span><span id="vram-info" style="font-size:13px;color:var(--text-dim)">—</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="pb-vram" style="width:0%"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Inference Engine</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><div style="font-size:11px;color:var(--text-dim)">STATUS</div><div style="font-size:16px;font-weight:700;color:var(--green)" id="engine-status">—</div></div>
+        <div><div style="font-size:11px;color:var(--text-dim)">TOKENS/SEC</div><div style="font-size:16px;font-weight:700;color:var(--accent)" id="tps-val">0.0</div></div>
+        <div><div style="font-size:11px;color:var(--text-dim)">KV CACHE</div><div style="font-size:14px;font-weight:600" id="kv-val">0 MB</div></div>
+        <div><div style="font-size:11px;color:var(--text-dim)">DISK</div><div style="font-size:14px;font-weight:600" id="disk-info">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Quick Actions</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="switchTab('chat')">💬 Open Chat</button>
+      <button class="btn btn-primary" onclick="switchTab('models')">🧠 Manage Models</button>
+      <button class="btn btn-ghost" onclick="switchTab('logs')">📋 View Logs</button>
+      <button class="btn btn-ghost" onclick="switchTab('connect')">🔗 API Endpoints</button>
+      <button class="btn btn-ghost" onclick="location.reload()">🔄 Refresh</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab: Chat -->
+<div class="main tab-content" id="tab-chat" style="display:none">
+  <div class="chat-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:14px;font-weight:600">NPU Chat Console</div>
+      <button class="btn btn-ghost" onclick="clearChat()" style="padding:4px 12px;font-size:12px">🗑 Clear History</button>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:13px">
+        Send a message to start chatting with your NPU-powered model.<br>
+        Chat history is saved locally in your browser.
+      </div>
+    </div>
+    <div id="typing-indicator" class="typing-dots" style="display:none"><span></span><span></span><span></span></div>
+    <div class="chat-input-row">
+      <textarea class="chat-input" id="chat-input" placeholder="Type a message... (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
+      <button class="btn btn-primary" id="send-btn" onclick="sendMessage()">Send ↵</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab: Models -->
+<div class="main tab-content" id="tab-models" style="display:none">
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Installed Models</div>
+    <div id="model-list"><div style="padding:20px;text-align:center;color:var(--text-dim)">Loading...</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Download New Model</div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">Enter a HuggingFace model ID (e.g. <code style="color:var(--accent)">OpenVINO/qwen2.5-1.5b-instruct-int4-ov</code>)</p>
+    <div style="display:flex;gap:8px">
+      <input class="chat-input" id="dl-model-name" placeholder="organization/model-name" style="flex:1">
+      <button class="btn btn-success" onclick="downloadModel()">⬇ Download</button>
+    </div>
+    <div class="download-progress" id="dl-progress" style="display:none">
+      <div class="download-info"><span>Downloading...</span><span class="download-speed">—</span><span class="download-eta">ETA: —</span></div>
+      <div class="progress-bar"><div class="progress-fill" id="pb-download" style="width:0%"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab: Logs -->
+<div class="main tab-content" id="tab-logs" style="display:none">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-title" style="margin:0">Live System Logs</div>
+      <input class="chat-input" id="log-filter" placeholder="🔍 Filter logs..." style="width:250px;padding:6px 12px;font-size:12px" oninput="renderLogs()">
+    </div>
+    <div class="log-viewer" id="log-viewer">
+      <div class="log-line"><span class="lvl-info">Waiting for log stream...</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab: Connect -->
+<div class="main tab-content" id="tab-connect" style="display:none">
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">API Endpoints</div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">HMIR serves an OpenAI-compatible API. Use these endpoints in your tools:</p>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="background:var(--bg-input);padding:12px 16px;border-radius:var(--radius-sm);font-family:var(--mono);font-size:13px;display:flex;justify-content:space-between;align-items:center">
+        <span><span style="color:var(--text-dim)">Chat: </span><span style="color:var(--accent)">http://localhost:8080/v1/chat/completions</span></span>
+        <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('http://localhost:8080/v1/chat/completions')">📋 Copy</button>
+      </div>
+      <div style="background:var(--bg-input);padding:12px 16px;border-radius:var(--radius-sm);font-family:var(--mono);font-size:13px;display:flex;justify-content:space-between;align-items:center">
+        <span><span style="color:var(--text-dim)">Health: </span><span style="color:var(--accent)">http://localhost:8080/v1/health</span></span>
+        <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('http://localhost:8080/v1/health')">📋 Copy</button>
+      </div>
+      <div style="background:var(--bg-input);padding:12px 16px;border-radius:var(--radius-sm);font-family:var(--mono);font-size:13px;display:flex;justify-content:space-between;align-items:center">
+        <span><span style="color:var(--text-dim)">Telemetry: </span><span style="color:var(--accent)">http://localhost:8080/v1/telemetry</span></span>
+        <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('http://localhost:8080/v1/telemetry')">📋 Copy</button>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Cursor / VS Code Integration</div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px">Add this to your editor settings to use HMIR as a local AI backend:</p>
+    <div style="background:var(--bg-input);padding:14px;border-radius:var(--radius-sm);font-family:var(--mono);font-size:12px;color:var(--accent);line-height:1.8">
+      "openai.apiBase": "http://localhost:8080/v1"<br>
+      "openai.model": "hmir-local"
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">CLI Commands</div>
+    <div style="display:flex;flex-direction:column;gap:8px;font-family:var(--mono);font-size:13px">
+      <div style="padding:8px 12px;background:var(--bg-input);border-radius:var(--radius-sm)"><span style="color:var(--green)">$</span> hmir start <span style="color:var(--text-dim)"> — Start API + Dashboard</span></div>
+      <div style="padding:8px 12px;background:var(--bg-input);border-radius:var(--radius-sm)"><span style="color:var(--green)">$</span> hmir stop <span style="color:var(--text-dim)"> — Stop all services</span></div>
+      <div style="padding:8px 12px;background:var(--bg-input);border-radius:var(--radius-sm)"><span style="color:var(--green)">$</span> hmir dashboard <span style="color:var(--text-dim)"> — Open native dashboard</span></div>
+      <div style="padding:8px 12px;background:var(--bg-input);border-radius:var(--radius-sm)"><span style="color:var(--green)">$</span> hmir download &lt;model&gt; <span style="color:var(--text-dim)"> — Download a model via CLI</span></div>
+    </div>
+  </div>
+</div>
+
+<script>/* HMIR_JS_PLACEHOLDER */</script>
+</body>
+</html>

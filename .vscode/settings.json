@@ -59,6 +59,9 @@
         "AIOE",
         "prober",
         "Nemo",
-        "ivpu"
+        "ivpu",
+        "venv",
+        "aiohttp",
+        "Deque"
     ]
 }

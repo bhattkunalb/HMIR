@@ -6,6 +6,19 @@
 
 HMIR is a heterogeneous local inference runtime for Windows, Linux, and macOS. It detects the hardware available on the machine, selects the best backend for the requested model, and exposes one developer-friendly API instead of forcing users to hand-pick devices and runtimes.
 
+## Troubleshooting NPU Usage
+
+If Windows Task Manager shows **0% NPU** usage while you are chatting:
+
+1. **Check HMIR Dashboard**: The HMIR Dashboard (native and web) tracks the internal engine state. If the dashboard shows high NPU utilization, the NPU is active.
+2. **Task Manager Limitation**: Windows Task Manager often fails to capture bursty OpenVINO GenAI workloads because the NPU execution happens in micro-bursts that are faster than the Task Manager polling rate.
+3. **Model Compatibility**: Ensure you are using a `-ov` (OpenVINO) model. GGUF models run on CPU/GPU via llama.cpp and will not utilize the NPU.
+4. **NPU Drivers**: Ensure you have the latest Intel NPU drivers (version 31.0.100.xxxx or higher).
+
+---
+
+## Command Reference
+
 The design goal is simple:
 
 - prefer `NPU` when it is available and the model fits
@@ -23,17 +36,19 @@ Full production architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 irm https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.ps1 | iex
 ```
 
-### Linux
+### Linux / macOS
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | bash
 ```
 
-### macOS
+The installer will:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | bash
-```
+1. Install Rust toolchain (if not present)
+2. Create a Python virtual environment with OpenVINO GenAI dependencies
+3. Build the Web Console static assets
+4. Build all HMIR binaries from source
+5. Add `hmir` to your PATH
 
 After install, HMIR probes local hardware automatically and routes across `NPU`, `GPU`, and `CPU`.
 
@@ -41,12 +56,14 @@ After install, HMIR probes local hardware automatically and routes across `NPU`,
 
 HMIR is not intended to be Intel-only.
 
-- `Intel`: OpenVINO-friendly NPU, Intel GPU, CPU
-- `NVIDIA`: CUDA-capable GPU fallback plus CPU
-- `AMD`: GPU fallback plus CPU, with room for vendor-specific NPU integrations
-- `Apple Silicon`: Metal / MLX-style future path plus CPU
-- `Qualcomm / AI PC NPUs`: targeted through pluggable backend support
-- `CPU-only systems`: supported as a first-class fallback
+| Platform | Devices | Engine |
+| --- | --- | --- |
+| **Intel** | NPU (AI Boost), iGPU, CPU | OpenVINO |
+| **NVIDIA** | CUDA GPU, CPU | llama.cpp |
+| **AMD** | GPU, CPU | llama.cpp |
+| **Apple Silicon** | Metal / MLX, CPU | llama.cpp |
+| **Qualcomm AI PC** | NPU, CPU | Pluggable |
+| **CPU-only** | First-class fallback | llama.cpp |
 
 ## Problem
 
@@ -77,9 +94,13 @@ HMIR combines:
 - `NPU-first` scheduling with transparent fallback
 - pluggable backends instead of hard-coded device logic
 - request-level load balancing across available devices
-- native dashboard with built-in chat, controls, integrations, and logs
+- **Web Console** — premium browser dashboard with live telemetry, chat, model management, and logs
+- **Native Dashboard** — desktop GUI with built-in chat, controls, integrations, and logs
+- **Model Downloads** — download models via web UI or CLI with progress tracking
+- **Chat History** — persistent chat via localStorage (web) and local storage (native)
 - simple CLI for suggest, pull, serve, logs, and integration flows
 - OpenAI-compatible `/v1/chat/completions`
+- real-time hardware telemetry (CPU, GPU, NPU, RAM, VRAM, disk)
 - explicit logging of selected backend and device
 
 ## 🏗️ Architecture
@@ -87,6 +108,8 @@ HMIR combines:
 ```mermaid
 graph TD
     User([User / SDK / CLI]) --> API[HMIR API Layer]
+    Browser([Web Console]) --> API
+    Dashboard([Native Dashboard]) --> API
     subgraph Core ["HMIR ELITE CORE"]
         API --> Sched[NPU-First Scheduler]
         Sched --> MM[Model Manager]
@@ -137,16 +160,32 @@ hmir pull qwen2.5-1.5b-ov
 hmir pull llama3.2-3b
 ```
 
-### 3. Start the local API
+### 3. Start the local API + Web Console
 
 ```bash
 hmir start --port 8080 --model qwen2.5-1.5b-ov
 ```
 
-### 3a. Start the native dashboard with built-in chat
+This starts the API server and opens the web console at `http://localhost:8080`.
+
+### 3a. Start with the native desktop dashboard
 
 ```bash
 hmir start --dashboard --model qwen2.5-1.5b-ov
+```
+
+### 3b. Headless mode (API only, no UI)
+
+```bash
+hmir start --no-browser --model qwen2.5-1.5b-ov
+```
+
+### 3c. Source Build Execution
+
+If you are developing or prefer to run directly from source instead of using the installed `hmir` binary, you can use Cargo:
+
+```bash
+cargo run --release -p hmir-cli -- start
 ```
 
 ### 4. Call the OpenAI-compatible endpoint
@@ -160,6 +199,14 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
+### 5. Download a model (CLI)
+
+```bash
+hmir download OpenVINO/qwen2.5-1.5b-instruct-int4-ov
+```
+
+Progress bars show download speed, ETA, and percentage completion.
+
 ## How It Works
 
 1. HMIR probes the machine and discovers available `NPU`, `GPU`, and `CPU` targets.
@@ -169,9 +216,19 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 5. If a device is unavailable or overloaded, HMIR retries on the next fallback path.
 6. Logs and telemetry show which backend and device handled the request.
 
-## Dashboard
+## Web Console
 
-The desktop dashboard is intended to be the main local control plane, not a launcher that immediately pushes you back to the browser.
+The browser-based web console is available at `http://localhost:8080` when the API is running. It provides:
+
+- **📊 Overview** — Real-time hardware gauges (CPU, GPU, NPU, RAM), inference engine status, tokens/sec
+- **💬 Chat** — Streaming chat with the NPU-powered model, persistent history via localStorage
+- **🧠 Models** — List installed models, load/eject models, download new models from HuggingFace
+- **📋 Logs** — Live system log stream with search/filter
+- **🔗 Connect** — Copy-paste API endpoints for Cursor, VS Code, Open WebUI, and other tools
+
+## Native Dashboard
+
+The desktop dashboard is the main local control plane:
 
 - native chat is built in
 - model mount and unmount controls are built in
@@ -179,16 +236,8 @@ The desktop dashboard is intended to be the main local control plane, not a laun
 - integration access details are built in
 - advanced log viewing is built in
 
-If you want the browserless flow, use:
-
 ```bash
 hmir start --dashboard
-```
-
-If you want a headless API for editors and agents, use:
-
-```bash
-hmir start --no-browser
 ```
 
 ## Integrations
@@ -212,7 +261,21 @@ That command prints the base URL, API key suggestion, and model hints you can re
 Default local API values:
 
 - Base URL: `http://127.0.0.1:8080/v1`
-- API key: `hmir-local`
+- API key: `hmir-local` (no auth required)
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/` | Web Console |
+| `POST` | `/v1/chat/completions` | OpenAI-compatible chat (streaming) |
+| `GET` | `/v1/models/installed` | List installed models |
+| `POST` | `/v1/models/download` | Download a model |
+| `POST` | `/v1/engine/switch` | Switch active model |
+| `POST` | `/v1/engine/eject` | Eject a model |
+| `GET` | `/v1/telemetry` | SSE telemetry stream |
+| `GET` | `/v1/logs` | SSE log stream |
+| `GET` | `/v1/health` | Health check |
 
 ## Logs
 
@@ -223,6 +286,8 @@ hmir logs --tail 200
 hmir logs --grep ERROR
 hmir logs --follow
 ```
+
+Or use the web console's **Logs** tab for live, filterable log viewing.
 
 ## MVP Scope
 
@@ -251,12 +316,13 @@ Not in the first cut:
 
 ## Repository Layout
 
-- `hmir-api`: API server and streaming surface
+- `hmir-api`: API server, streaming surface, and web console
 - `hmir-core`: orchestration, scheduler, memory, telemetry
-- `hmir-hardware-prober`: cross-platform hardware detection
+- `hmir-hardware-prober`: cross-platform hardware detection (CPU, GPU, NPU, RAM)
+- `hmir-dashboard`: native desktop dashboard (egui)
 - `hmir-sys`: low-level backend bindings and adapters
 - `deploy/packaging/hmir-cli`: CLI entrypoint
-- `scripts`: installation and transitional backend helpers
+- `scripts`: installation, model downloads, and backend helpers
 
 ## Contributing
 

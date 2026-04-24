@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::process::Command;
 
-pub async fn start_daemon(port: u16, dashboard: bool, model: Option<String>, no_browser: bool) {
+pub async fn start_daemon(port: u16, web: bool, model: Option<String>) {
     let bin_dir = current_bin_dir();
 
     println!("🚀 HMIR ELITE | INITIALIZING INFERENCE NODE");
@@ -70,7 +70,7 @@ pub async fn start_daemon(port: u16, dashboard: bool, model: Option<String>, no_
     }
 
     // 3. Start Native Dashboard
-    if dashboard {
+    if !web {
         print!("🖥️ Launching Native Dashboard... ");
         let dash_path = bin_dir.join(executable_name("hmir-dashboard"));
         match Command::new(&dash_path)
@@ -84,7 +84,7 @@ pub async fn start_daemon(port: u16, dashboard: bool, model: Option<String>, no_
 
     // 4. Auto-Open Web Portal only for browser-first flow
     let unified_url = format!("http://127.0.0.1:{}", port);
-    if !dashboard && !no_browser {
+    if web {
         println!("🌐 Auto-opening Web Console: {}", unified_url);
         tokio::time::sleep(Duration::from_secs(2)).await;
         if let Err(e) = webbrowser::open(&unified_url) {
@@ -96,11 +96,10 @@ pub async fn start_daemon(port: u16, dashboard: bool, model: Option<String>, no_
     println!("🚀 HMIR API: {}", unified_url);
     println!("🔌 OpenAI-compatible base URL: {}/v1", unified_url);
     println!("💎 Node is running in background.");
-    if dashboard {
+    if !web {
         println!("🖥️  Native dashboard includes chat, model controls, integrations, and logs.");
-    }
-    if no_browser {
-        println!("🌙 Headless mode enabled. Ready for editor and agent integrations.");
+    } else {
+        println!("🌐 Legacy Web UI has been launched in your browser.");
     }
     println!("💡 Use 'hmir stop' to terminate all instances.");
 }

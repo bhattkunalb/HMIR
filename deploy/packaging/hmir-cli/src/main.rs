@@ -37,15 +37,12 @@ enum Commands {
         /// The port to listen on for the API
         #[arg(short, long, default_value = "8080")]
         port: u16,
-        /// Launch the native dashboard with built-in chat, controls, integrations, and logs
+        /// Launch the legacy web dashboard in the browser instead of the native app
         #[arg(short, long)]
-        dashboard: bool,
+        web: bool,
         /// The model to load on startup
         #[arg(short, long)]
         model: Option<String>,
-        /// Do not open the browser automatically
-        #[arg(long)]
-        no_browser: bool,
     },
     /// Stop all running HMIR instances
     Stop,
@@ -100,12 +97,11 @@ async fn main() {
         }
         Commands::Start {
             port,
-            dashboard,
+            web,
             model,
-            no_browser,
         } => {
             println!("🚀 Launching HMIR ELITE Compute Hub");
-            commands::start::start_daemon(port, dashboard, model, no_browser).await;
+            commands::start::start_daemon(port, web, model).await;
         }
         Commands::Stop => {
             stop_all_instances();

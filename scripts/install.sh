@@ -191,8 +191,8 @@ main() {
   echo "Next steps:"
   echo "  1. Restart your shell or source your rc file."
   echo "  2. Run: hmir suggest"
-  echo "  3. Start native dashboard: hmir start --dashboard"
-  echo "  4. Headless API mode: hmir start --no-browser"
+  echo "  3. Start native dashboard: hmir start"
+  echo "  4. Start legacy web API UI: hmir start --web"
   echo "  5. Integration help: hmir integrations"
 }
 

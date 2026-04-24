@@ -99,14 +99,43 @@ impl DashboardApp {
         chat_history: Arc<Mutex<Vec<ChatEntry>>>,
         api_base_url: String,
     ) -> Self {
+        // Premium Dark Theme (Slate & Cyan)
+        let mut visuals = egui::Visuals::dark();
+        
+        // Backgrounds
+        visuals.window_fill = egui::Color32::from_rgb(15, 17, 21); // Deep Slate
+        visuals.panel_fill = egui::Color32::from_rgb(15, 17, 21);
+        
+        // Widgets (Buttons, Inputs)
+        visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(25, 29, 36);
+        visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(200, 210, 230));
+        
+        visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(34, 40, 50);
+        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(220, 230, 255));
+        
+        visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(45, 52, 64);
+        visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.2, egui::Color32::from_rgb(0, 242, 255));
+        
+        visuals.widgets.active.bg_fill = egui::Color32::from_rgb(0, 242, 255);
+        visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::BLACK);
+        
+        // Selection/Accent
+        visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(0, 242, 255, 40);
+        visuals.hyperlink_color = egui::Color32::from_rgb(0, 242, 255);
+        
+        // Explicit Text Colors (Force high contrast)
+        visuals.override_text_color = Some(egui::Color32::from_rgb(235, 240, 250));
+        
         let mut style = (*cc.egui_ctx.style()).clone();
-        style.visuals.window_fill = egui::Color32::from_rgb(5, 5, 7);
-        style.visuals.panel_fill = egui::Color32::from_rgb(5, 5, 7);
-        style.visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(15, 18, 23);
-        style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(30, 35, 45);
-        style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(0, 242, 255);
-        style.visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(0, 242, 255, 40);
-        style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::BLACK);
+        style.visuals = visuals;
+        
+        // Rounding for premium feel
+        style.visuals.widgets.noninteractive.rounding = egui::Rounding::same(6.0);
+        style.visuals.widgets.inactive.rounding = egui::Rounding::same(6.0);
+        style.visuals.widgets.hovered.rounding = egui::Rounding::same(6.0);
+        style.visuals.widgets.active.rounding = egui::Rounding::same(6.0);
+        style.visuals.window_rounding = egui::Rounding::same(10.0);
+        
         cc.egui_ctx.set_style(style);
 
         Self {

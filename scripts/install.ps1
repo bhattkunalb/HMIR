@@ -23,7 +23,7 @@ $REQUIRED_NET_VERSION = "6.0"  # .NET 6+ for some dependencies
 # Maintenance & Purge
 # ========================================
 function Invoke-ForcePurge {
-    Write-Info "🚀 HMIR ELITE | PURGING STALE ENVIRONMENT"
+    Write-Info " HMIR ELITE | PURGING STALE ENVIRONMENT"
     
     # 1. Force kill all related processes
     $targets = @("hmir", "hmir-api", "hmir-dashboard", "hmir-npu-worker", "hmir-e2e", "python", "uvicorn")
@@ -66,9 +66,9 @@ $ColorWarn = "Yellow"
 $ColorError = "Red"
 
 function Write-Info    { param($msg) Write-Host "[INFO] " -ForegroundColor $ColorInfo -NoNewline; Write-Host $msg }
-function Write-Success { param($msg) Write-Host "[✓] " -ForegroundColor $ColorSuccess -NoNewline; Write-Host $msg }
-function Write-Warn    { param($msg) Write-Host "[⚠] " -ForegroundColor $ColorWarn -NoNewline; Write-Host $msg }
-function Write-Error   { param($msg) Write-Host "[✗] " -ForegroundColor $ColorError -NoNewline; Write-Host $msg; exit 1 }
+function Write-Success { param($msg) Write-Host "[+] " -ForegroundColor $ColorSuccess -NoNewline; Write-Host $msg }
+function Write-Warn    { param($msg) Write-Host "[!] " -ForegroundColor $ColorWarn -NoNewline; Write-Host $msg }
+function Write-Error   { param($msg) Write-Host "[-] " -ForegroundColor $ColorError -NoNewline; Write-Host $msg; exit 1 }
 
 # ========================================
 # System Checks
@@ -263,6 +263,12 @@ function Build-FromSource {
     try {
         Push-Location $sourcePath
         
+        # Build Web UI static assets
+        if (Test-Path "hmir-api\src\build_ui.ps1") {
+            Write-Info "Building Web UI static assets..."
+            & "hmir-api\src\build_ui.ps1"
+        }
+
         # Build release (no --features on virtual workspace manifest)
         Write-Info "Building release binaries..."
         cargo build --release --workspace 2>&1 | Out-Host
@@ -281,7 +287,7 @@ function Build-FromSource {
             }
 
             # Copy scripts directory for NPU worker
-            $srcScripts = Join-Path $tempRepo "scripts"
+            $srcScripts = Join-Path $sourcePath "scripts"
             if (Test-Path $srcScripts) {
                 $destScripts = Join-Path $InstallPath "scripts"
                 if (-not (Test-Path $destScripts)) {
@@ -299,7 +305,7 @@ function Build-FromSource {
         
     } finally {
         Pop-Location
-        if (Test-Path $tempRepo) {
+        if ($tempRepo -and (Test-Path $tempRepo)) {
             Remove-Item -Recurse -Force $tempRepo
         }
     }
@@ -428,15 +434,44 @@ function Test-Installation {
 }
 
 # ========================================
+# Python Environment Setup
+# ========================================
+function Install-PythonEnvironment {
+    Write-Info "Setting up Python virtual environment..."
+    
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+        Write-Error "Python is required but not installed. Please install Python 3.10+."
+    }
+    
+    $venvPath = Join-Path $InstallPath ".venv"
+    if (-not (Test-Path $venvPath)) {
+        Write-Info "Creating virtual environment at $venvPath..."
+        python -m venv $venvPath
+    } else {
+        Write-Info "Virtual environment already exists at $venvPath."
+    }
+    
+    $pip = Join-Path $venvPath "Scripts\pip.exe"
+    if (-not (Test-Path $pip)) {
+        Write-Error "Failed to locate pip in virtual environment."
+    }
+    
+    Write-Info "Installing Python dependencies (aiohttp, openvino-genai, huggingface-hub)..."
+    & $pip install --upgrade pip | Out-Null
+    & $pip install aiohttp openvino-genai huggingface-hub | Out-Null
+    Write-Success "Python environment setup complete."
+}
+
+# ========================================
 # Main Execution
 # ========================================
 function Main {
-    Write-Host "🚀 HMIR Windows Installer" -ForegroundColor $ColorInfo
+    Write-Host " HMIR Windows Installer" -ForegroundColor $ColorInfo
     Write-Host "Repository: https://github.com/$REPO" -ForegroundColor $ColorInfo
     Write-Host ""
     
     if ($DryRun) {
-        Write-Host "🔍 Dry-run mode: showing actions without applying" -ForegroundColor $ColorWarn
+        Write-Host " Dry-run mode: showing actions without applying" -ForegroundColor $ColorWarn
         Write-Host "Target install path: $InstallPath"
         return
     }
@@ -448,18 +483,19 @@ function Main {
     Write-Info "Detected platform: $($platform.Target)"
     
     Install-Binaries -PlatformInfo $platform
+    Install-PythonEnvironment
     Update-UserPath
     Test-NPUDrivers
     Test-Installation
     
     Write-Host ""
-    Write-Success "🎉 Installation complete!"
+    Write-Success " Installation complete!"
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor $ColorInfo
     Write-Host "  1. Restart PowerShell or run: `$env:PATH = '$InstallPath;' + `$env:PATH"
     Write-Host "  2. Get model recommendations: hmir suggest"
-    Write-Host "  3. Start native dashboard: hmir start --dashboard"
-    Write-Host "  4. Start headless API only: hmir start --no-browser"
+    Write-Host "  3. Start native dashboard: hmir start"
+    Write-Host "  4. Start legacy web API UI: hmir start --web"
     Write-Host "  5. Integration help: hmir integrations"
     Write-Host "  6. API endpoint: http://localhost:$API_PORT/v1/chat/completions"
     Write-Host ""
