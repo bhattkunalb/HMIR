@@ -17,7 +17,7 @@ param(
 # Configuration & Constants
 # ========================================
 $REPO = "bhattkunalb/HMIR"
-$BUILD_TIMESTAMP = "2026-04-24-17:45" # Added to verify version
+$BUILD_TIMESTAMP = "2026-04-24-17:53" # Cache buster
 $RELEASE_ENDPOINT = "https://api.github.com/repos/$REPO/releases/latest"
 $API_PORT = 8080
 $MIN_WINDOWS_BUILD = 19041  # Windows 10 20H2
@@ -429,7 +429,8 @@ function Main {
     # Verification
     if (-not (Test-Path "$InstallPath\hmir.exe")) {
         Write-Error "CRITICAL: hmir.exe not found in $InstallPath after installation."
-        exit 1
+        Read-Host "Press Enter to close..."
+        return
     }
     
     Test-Installation
@@ -447,6 +448,8 @@ function Main {
     Write-Host ""
     Write-Host "Documentation: https://github.com/$REPO/blob/main/README.md" -ForegroundColor $ColorInfo
     Write-Host "Troubleshooting: hmir logs --tail 200"
+    Write-Host ""
+    Read-Host "Installation process complete. Press Enter to close this window..."
 }
 
 # Run main
