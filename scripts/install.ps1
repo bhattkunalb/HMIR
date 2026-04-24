@@ -267,7 +267,7 @@ function Build-FromSource {
         # Build Web UI static assets
         if (Test-Path "hmir-api\src\build_ui.ps1") {
             Write-Info "Building Web UI static assets..."
-            & "hmir-api\src\build_ui.ps1"
+            powershell -ExecutionPolicy Bypass -File "hmir-api\src\build_ui.ps1"
         }
 
         # Build release (no --features on virtual workspace manifest)
