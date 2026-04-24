@@ -24,7 +24,7 @@ $REQUIRED_NET_VERSION = "6.0"  # .NET 6+ for some dependencies
 # ========================================
 function Invoke-ForcePurge {
     Write-Info " HMIR ELITE | PURGING STALE ENVIRONMENT"
-    
+
     # 1. Force kill all related processes
     $targets = @("hmir", "hmir-api", "hmir-dashboard", "hmir-npu-worker", "hmir-e2e", "python", "uvicorn")
     foreach ($t in $targets) {
@@ -38,7 +38,7 @@ function Invoke-ForcePurge {
     # 2. Hard Purge Binaries (Rename-to-Delete strategy for locked files)
     if (Test-Path $InstallPath) {
         Write-Info "Executing Rename-to-Delete purge in $InstallPath..."
-        
+
         # Clean scripts if they exist
         if (Test-Path "$InstallPath\scripts") {
             Remove-Item -Path "$InstallPath\scripts" -Recurse -Force -ErrorAction SilentlyContinue
@@ -75,19 +75,19 @@ function Write-Error   { param($msg) Write-Host "[-] " -ForegroundColor $ColorEr
 # ========================================
 function Test-SystemRequirements {
     Write-Info "Checking system requirements..."
-    
+
     # Windows version
     $winVersion = [System.Environment]::OSVersion.Version.Build
     if ($winVersion -lt $MIN_WINDOWS_BUILD) {
         Write-Warn "Windows build $winVersion detected. Minimum required: $MIN_WINDOWS_BUILD (Windows 10 20H2+)"
         Write-Warn "Continuing anyway, but some features may not work."
     }
-    
+
     # PowerShell version
     if ($PSVersionTable.PSVersion.Major -lt 5) {
         Write-Error "PowerShell 5.0+ required. Current: $($PSVersionTable.PSVersion)"
     }
-    
+
     # .NET runtime check (for some dependencies)
     try {
         $dotnetVersion = dotnet --version 2>$null
@@ -97,16 +97,17 @@ function Test-SystemRequirements {
     } catch {
         Write-Warn "dotnet CLI not found. Some optional features may be unavailable."
     }
-    
+
     # Administrator check for NPU drivers (optional)
     if (-not $SkipNPUCheck) {
         $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         if (-not $isAdmin) {
             Write-Warn "Not running as Administrator. NPU driver detection may be limited."
-            Write-Warn "To enable full NPU support, re-run: Start-Process powershell -Verb RunAs -ArgumentList '-ExecutionPolicy Bypass -File `"$PSCommandPath`"'"
+            $setupCmd = "Start-Process powershell -Verb RunAs -ArgumentList '-ExecutionPolicy Bypass -File `"$PSCommandPath`"'"
+            Write-Warn "To enable full NPU support, re-run: $setupCmd"
         }
     }
-    
+
     # Git and curl availability
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Error "Git is required but not installed. Install from: https://git-scm.com/download/win"
@@ -114,7 +115,7 @@ function Test-SystemRequirements {
     if (-not (Get-Command curl -ErrorAction SilentlyContinue)) {
         Write-Error "curl is required but not installed. Enable via: Settings > Apps > Optional Features > Add 'curl'"
     }
-    
+
     Write-Success "System checks passed"
 }
 
@@ -127,12 +128,12 @@ function Get-PlatformInfo {
         0 { "x86" }      # x86
         9 { "x86_64" }   # x64
         12 { "arm64" }   # ARM64
-        default { 
+        default {
             Write-Warn "Unknown architecture: $arch. Defaulting to x86_64"
             "x86_64"
         }
     }
-    
+
     return @{
         Architecture = $platform
         OS = "pc-windows-msvc"
@@ -145,9 +146,9 @@ function Get-PlatformInfo {
 # ========================================
 function Install-Binaries {
     param($PlatformInfo)
-    
+
     Write-Info "Fetching latest release from $REPO..."
-    
+
     try {
         $release = Invoke-RestMethod -Uri $RELEASE_ENDPOINT -Headers @{"Accept"="application/vnd.github.v3+json"}
         $tag = $release.tag_name
@@ -158,7 +159,7 @@ function Install-Binaries {
         Build-FromSource
         return
     }
-    
+
     if (-not $tag -or $Local) {
         if ($Local) {
             Write-Info "Local install requested (--Local switch detected)."
@@ -168,51 +169,51 @@ function Install-Binaries {
         Build-FromSource -UseLocal $Local
         return
     }
-    
+
     Write-Info "Installing HMIR $tag for $($PlatformInfo.Target)..."
-    
+
     # Find matching asset
     $assetName = "hmir-$tag-$($PlatformInfo.Target).zip"
     $asset = $assets | Where-Object { $_.name -eq $assetName }
-    
+
     if (-not $asset) {
         Write-Warn "Prebuilt binary not found: $assetName"
         Write-Warn "Falling back to source build (requires Rust toolchain)..."
         Build-FromSource
         return
     }
-    
+
     # Create temp directory
     $tempDir = Join-Path $env:TEMP "hmir-install-$((Get-Date).ToString('yyyyMMddHHmmss'))"
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-    
+
     try {
         # Download and extract
         $downloadPath = Join-Path $tempDir $assetName
         Write-Info "Downloading $($asset.browser_download_url)..."
         Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $downloadPath
-        
+
         Write-Info "Extracting to $tempDir..."
         Expand-Archive -Path $downloadPath -DestinationPath $tempDir -Force
-        
+
         # Create install directory
         if (-not (Test-Path $InstallPath)) {
             New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
         }
-        
+
         # Copy binaries
         Get-ChildItem "$tempDir\hmir-*" -File | ForEach-Object {
             Copy-Item $_.FullName -Destination $InstallPath -Force
             Write-Info "Installed $($_.Name)"
         }
-        
+
         # Make executables
         Get-ChildItem "$InstallPath\*.exe" | ForEach-Object {
             Unblock-File $_.FullName  # Remove Mark of the Web
         }
-        
+
         Write-Success "Binaries installed to $InstallPath"
-        
+
     } finally {
         # Cleanup temp
         if (Test-Path $tempDir) {
@@ -226,7 +227,7 @@ function Install-Binaries {
 # ========================================
 function Build-FromSource {
     param([switch]$UseLocal)
-    
+
     # Check Rust toolchain
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
         Write-Host "[!] Rust toolchain required for source build." -ForegroundColor $ColorError
@@ -245,7 +246,7 @@ function Build-FromSource {
             $sourcePath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent # Simplified path resolution
             $sourcePath = Resolve-Path "$PSScriptRoot\.."
         }
-        
+
         if ($sourcePath) {
             Write-Success "Detected HMIR source at $sourcePath. Building local version..."
         }
@@ -259,10 +260,10 @@ function Build-FromSource {
         git clone --depth 1 --branch main "https://github.com/$REPO.git" $tempRepo | Out-Null
         $sourcePath = $tempRepo
     }
-    
+
     try {
         Push-Location $sourcePath
-        
+
         # Build Web UI static assets
         if (Test-Path "hmir-api\src\build_ui.ps1") {
             Write-Info "Building Web UI static assets..."
@@ -272,12 +273,12 @@ function Build-FromSource {
         # Build release (no --features on virtual workspace manifest)
         Write-Info "Building release binaries..."
         cargo build --release --workspace 2>&1 | Out-Host
-        
+
         # Install to target path
         if (-not (Test-Path $InstallPath)) {
             New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
         }
-        
+
         # Copy all hmir-* binaries found in target/release
         $binaries = Get-ChildItem "target\release\hmir*.exe" -ErrorAction SilentlyContinue
         if ($binaries) {
@@ -302,7 +303,7 @@ function Build-FromSource {
             Write-Warn "Build completed but no hmir-*.exe binaries found in target/release."
             Write-Warn "The workspace crates may not yet define [[bin]] targets."
         }
-        
+
     } finally {
         Pop-Location
         if ($tempRepo -and (Test-Path $tempRepo)) {
@@ -317,14 +318,14 @@ function Build-FromSource {
 function Update-UserPath {
     if ($env:PATH -notlike "*$InstallPath*") {
         Write-Warn "$InstallPath is not in your user PATH."
-        
+
         $confirm = Read-Host "Add $InstallPath to user PATH? [Y/n]"
         if ($confirm -eq "" -or $confirm -eq "Y" -or $confirm -eq "y") {
             # Use [Environment]::SetEnvironmentVariable for user-level PATH
             $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
             $newPath = "$InstallPath;$currentPath"
             [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
-            
+
             Write-Success "Added $InstallPath to user PATH"
             Write-Info "Restart PowerShell or run: `$env:PATH = $newPath; + `$env:PATH"
         }
@@ -361,11 +362,11 @@ function Test-Installation {
 # ========================================
 function Install-PythonEnvironment {
     Write-Info "Setting up Python virtual environment..."
-    
+
     if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
         Write-Error "Python is required but not installed. Please install Python 3.10+."
     }
-    
+
     $venvPath = Join-Path $InstallPath ".venv"
     if (-not (Test-Path $venvPath)) {
         Write-Info "Creating virtual environment at $venvPath..."
@@ -373,12 +374,12 @@ function Install-PythonEnvironment {
     } else {
         Write-Info "Virtual environment already exists at $venvPath."
     }
-    
+
     $pip = Join-Path $venvPath "Scripts\pip.exe"
     if (-not (Test-Path $pip)) {
         Write-Error "Failed to locate pip in virtual environment."
     }
-    
+
     Write-Info "Installing Python dependencies (aiohttp, openvino-genai, huggingface-hub)..."
     & $pip install --upgrade pip | Out-Null
     & $pip install aiohttp openvino-genai huggingface-hub | Out-Null
@@ -392,25 +393,30 @@ function Main {
     Write-Host " HMIR Windows Installer" -ForegroundColor $ColorInfo
     Write-Host "Repository: https://github.com/$REPO" -ForegroundColor $ColorInfo
     Write-Host ""
-    
+
     if ($DryRun) {
         Write-Host " Dry-run mode: showing actions without applying" -ForegroundColor $ColorWarn
         Write-Host "Target install path: $InstallPath"
         return
     }
-    
+
     Test-SystemRequirements
     Invoke-ForcePurge
-    
+
     $platform = Get-PlatformInfo
     Write-Info "Detected platform: $($platform.Target)"
-    
+
     Install-Binaries -PlatformInfo $platform
     Install-PythonEnvironment
     Update-UserPath
-    Test-NPUDrivers
-    Test-Installation
     
+    $npuDetected = Test-NPUDrivers
+    if (-not $npuDetected) {
+        Write-Warn "NPU not detected or drivers inactive. AI inference will fall back to CPU."
+    }
+    
+    Test-Installation
+
     Write-Host ""
     Write-Success " Installation complete!"
     Write-Host ""
