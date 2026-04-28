@@ -55,8 +55,6 @@ enum Commands {
     },
     /// Stop all running HMIR instances
     Stop,
-    /// Suggest the best model for your hardware
-    Suggest,
     /// Launch the native dashboard directly
     #[command(visible_alias = "ui")]
     Dashboard {
@@ -133,9 +131,6 @@ async fn main() {
         Commands::Stop => {
             stop_all_instances();
             println!("✅ HMIR ELITE specialized resources released.");
-        }
-        Commands::Suggest => {
-            commands::suggest::ModelRecommender::new().suggest("Balanced").await;
         }
         Commands::Dashboard { port } => {
             println!("🖥️  Launching HMIR Dashboard...");
