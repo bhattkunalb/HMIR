@@ -140,13 +140,23 @@ async fn main() {
             let hmir_dir = std::path::Path::new(&home).join(".hmir");
 
             if hmir_dir.exists() {
-                match std::fs::remove_dir_all(&hmir_dir) {
-                    Ok(_) => println!("  ✅ Runtime directory purged."),
-                    Err(e) => println!(
-                        "  ⚠️  Partial purge: {}. Manual removal of {} may be required.",
-                        e,
-                        hmir_dir.display()
-                    ),
+                // Try standard removal first
+                if let Err(_) = std::fs::remove_dir_all(&hmir_dir) {
+                    // If failed (locks), try the rename-to-delete strategy for sub-binaries
+                    println!("  ⚠️  Standard purge blocked. Attempting deep purge...");
+                    
+                    // Small delay to allow OS to catch up with taskkill
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    
+                    let _ = purge_directory_robust(&hmir_dir);
+                    
+                    if hmir_dir.exists() {
+                        println!("  ⚠️  Partial purge: Access is denied. Manual removal of {} may be required after a reboot.", hmir_dir.display());
+                    } else {
+                        println!("  ✅ Deep purge successful.");
+                    }
+                } else {
+                    println!("  ✅ Runtime directory purged.");
                 }
             }
 
@@ -171,9 +181,13 @@ fn stop_all_instances() {
             .output();
 
         println!("  [3/3] Deactivating NPU Bridges...");
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "python.exe", "/T"])
+        // Surgical kill using PowerShell to avoid killing unrelated python processes
+        let _ = std::process::Command::new("powershell")
+            .args(["-Command", "Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*hmir_npu_service.py*' } | Stop-Process -Force"])
             .output();
+        
+        // Give the OS time to release file handles
+        std::thread::sleep(std::time::Duration::from_millis(1000));
     } else {
         println!("  [1/3] Closing Inference API...");
         let _ = std::process::Command::new("pkill")
@@ -189,5 +203,30 @@ fn stop_all_instances() {
         let _ = std::process::Command::new("pkill")
             .args(["-f", "hmir_npu_service.py"])
             .output();
+        
+        std::thread::sleep(std::time::Duration::from_millis(500));
     }
+}
+
+/// Robustly purge a directory by renaming locked files before deletion
+fn purge_directory_robust(path: &std::path::Path) -> std::io::Result<()> {
+    if !path.exists() { return Ok(()); }
+
+    if path.is_dir() {
+        for entry in std::fs::read_dir(path)? {
+            let entry = entry?;
+            let _ = purge_directory_robust(&entry.path());
+        }
+        let _ = std::fs::remove_dir(path);
+    } else {
+        // Attempt direct delete
+        if let Err(_) = std::fs::remove_file(path) {
+            // Rename locked file to .old and try again or just leave it for next reboot
+            let old_path = path.with_extension(format!("{}.old", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            if let Ok(_) = std::fs::rename(path, &old_path) {
+                let _ = std::fs::remove_file(old_path);
+            }
+        }
+    }
+    Ok(())
 }
