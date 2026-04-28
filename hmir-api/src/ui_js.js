@@ -30,7 +30,7 @@ function connectTelemetry() {
           prog.querySelector('.download-info span:first-child').textContent = 'Downloading ' + d.DownloadStatus.model + '...';
           prog.querySelector('.download-info span:last-child').textContent = d.DownloadStatus.status;
           setProgress('dl-bar', d.DownloadStatus.progress * 100);
-          if (d.DownloadStatus.progress >= 1.0) prog.style.display = 'none';
+          if (d.DownloadStatus.progress >= 1) prog.style.display = 'none';
         }
       }
     } catch {}
@@ -98,7 +98,10 @@ function setProgress(id, pct) {
   const el = document.getElementById(id);
   if (!el) return;
   el.style.width = Math.min(pct, 100) + '%';
-  el.className = 'progress-fill' + (pct > 90 ? ' danger' : pct > 70 ? ' warn' : '');
+  let cls = 'progress-fill';
+  if (pct > 90) cls += ' danger';
+  else if (pct > 70) cls += ' warn';
+  el.className = cls;
 }
 function formatUptime(s) {
   const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
@@ -178,7 +181,7 @@ function drawSparkline(canvasId, dataKey, colorHex) {
     const cpx = (prev.x + curr.x) / 2;
     ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
   }
-  ctx.lineTo(points[points.length - 1].x, h);
+  ctx.lineTo(points.at(-1).x, h);
   ctx.closePath();
   ctx.fillStyle = grad;
   ctx.fill();
@@ -197,7 +200,7 @@ function drawSparkline(canvasId, dataKey, colorHex) {
   ctx.stroke();
 
   // Current value dot
-  const last = points[points.length - 1];
+  const last = points.at(-1);
   ctx.beginPath();
   ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
   ctx.fillStyle = colorHex;
@@ -337,7 +340,7 @@ function saveChatHistory() {
 
 async function sendMessage() {
   const input = document.getElementById('chat-input');
-  if (!input || !input.value.trim() || state.streaming) return;
+  if (!input?.value?.trim() || state.streaming) return;
   const msg = input.value.trim();
   input.value = '';
   const now = new Date().toLocaleTimeString();
@@ -411,7 +414,11 @@ async function loadModels() {
     const data = await r.json();
     state.models = data.models || [];
     renderModels();
-  } catch { state.models = []; renderModels(); }
+  } catch (e) {
+    console.error('Failed to load models:', e);
+    state.models = [];
+    renderModels();
+  }
 }
 
 function renderModels() {
@@ -421,26 +428,32 @@ function renderModels() {
     box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)">No models installed. Download one below.</div>';
     return;
   }
-  box.innerHTML = state.models.map(m =>
-    `<div class="model-row">
-      <div><div class="model-name">${escapeHtml(m.name || m)}</div>
+  box.innerHTML = state.models.map(m => {
+    const name = m.name || m;
+    const active = m.active === true;
+    return `<div class="model-row">
+      <div><div class="model-name">${escapeHtml(name)}</div>
       <div class="model-size">${m.size || ''}</div></div>
       <div style="display:flex;gap:8px;align-items:center">
-        <span class="model-badge ${m.active ? 'active' : 'idle'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
-        ${!m.active ? `<button class="btn btn-primary" onclick="switchModel('${escapeHtml(m.name||m)}')">Load</button>` : ''}
-        ${!m.active ? `<button class="btn btn-danger" onclick="ejectModel('${escapeHtml(m.name||m)}')">Eject</button>` : ''}
+        <span class="model-badge ${active ? 'active' : 'idle'}">${active ? 'ACTIVE' : 'IDLE'}</span>
+        ${active ? '' : `<button class="btn btn-primary" onclick="switchModel('${escapeHtml(name)}')">Load</button>`}
+        ${active ? '' : `<button class="btn btn-danger" onclick="ejectModel('${escapeHtml(name)}')">Eject</button>`}
       </div>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 }
 
 async function switchModel(name) {
   try {
     setText('engine-status', 'LOADING...');
-    await fetch(API + '/v1/engine/switch', {
+    const r = await fetch(API + '/v1/engine/switch', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
     });
+    const res = await r.json();
+    if (!r.ok || res.status === 'Failed' || res.status === 'Worker Offline') {
+      alert('Failed to switch model: ' + (res.error || res.status || 'Unknown error'));
+    }
     await loadModels();
   } catch (e) { alert('Failed to switch model: ' + e.message); }
 }
@@ -458,7 +471,7 @@ async function ejectModel(name) {
 
 async function downloadModel() {
   const input = document.getElementById('dl-model-name');
-  if (!input || !input.value.trim()) return;
+  if (!input?.value?.trim()) return;
   const name = input.value.trim();
   input.value = '';
   const prog = document.getElementById('dl-progress');
@@ -506,7 +519,7 @@ function switchTab(tab) {
 
 // --- Helpers ---
 function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 }
 
 // --- Health check ---
@@ -519,7 +532,7 @@ async function checkHealth() {
 }
 
 // --- Init ---
-window.addEventListener('DOMContentLoaded', () => {
+globalThis.addEventListener('DOMContentLoaded', () => {
   connectTelemetry();
   connectLogs();
   renderChat();

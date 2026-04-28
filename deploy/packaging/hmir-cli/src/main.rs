@@ -80,6 +80,8 @@ enum Commands {
         #[arg(long)]
         dir: bool,
     },
+    /// Purge runtime caches (OpenVINO, etc.) to resolve loading errors
+    Clean,
     /// Uninstall HMIR ELITE and purge all runtime data
     Uninstall,
 }
@@ -125,6 +127,9 @@ async fn main() {
             dir,
         } => {
             commands::logs::run_logs(tail, grep.as_deref(), follow, dir);
+        }
+        Commands::Clean => {
+            commands::clean::run_clean().await;
         }
         Commands::Uninstall => {
             println!("🗑️  HMIR ELITE | COMMENCING FULL SYSTEM UNINSTALL");

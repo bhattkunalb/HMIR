@@ -11,6 +11,7 @@ import json
 import asyncio
 import argparse
 import platform
+import shutil
 from aiohttp import web  # pylint: disable=import-error
 from openvino_genai import LLMPipeline  # pylint: disable=import-error
 
@@ -42,25 +43,57 @@ pipeline_lock = asyncio.Lock()
 current_model_path = None
 service_status = "INITIALIZING"  # INITIALIZING | READY | LOADING | ERROR
 
-def init_pipeline(model_path=None):
+def purge_model_cache(model_path):
+    """Attempt to find and purge OpenVINO cache folders in the model directory."""
+    cache_purged = False
+    # OpenVINO GenAI often creates a folder named 'cl_cache' or similar in the model dir or CWD
+    # We'll check the model dir for 'cache' or 'cl_cache' folders
+    for cache_name in ["cache", "cl_cache", "blob_cache"]:
+        potential_cache = os.path.join(model_path, cache_name)
+        if os.path.exists(potential_cache) and os.path.isdir(potential_cache):
+            print(f"[NPU-SERVICE] Purging corrupt cache: {potential_cache}", flush=True)
+            try:
+                shutil.rmtree(potential_cache)
+                cache_purged = True
+            except Exception as e:
+                print(f"[NPU-SERVICE] Failed to purge {potential_cache}: {e}", flush=True)
+    return cache_purged
+
+def handle_pipeline_error(e, resolved_path, model_path, retry_on_cache_fail):
+    """Handle errors occurring during pipeline initialization."""
+    global service_status, pipeline
+    err_msg = str(e)
+    print(f"[NPU-SERVICE] CRITICAL - Failed to load on NPU: {err_msg}", flush=True)
+
+    if "Cache entry deserialization failed" in err_msg:
+        print("[NPU-SERVICE] HINT: Corrupt OpenVINO cache detected.", flush=True)
+        if retry_on_cache_fail and purge_model_cache(resolved_path):
+            print("[NPU-SERVICE] Cache purged. Retrying model load...", flush=True)
+            return init_pipeline(model_path, retry_on_cache_fail=False)
+    elif "Device with name 'NPU' is not registered" in err_msg:
+        print("[NPU-SERVICE] HINT: NPU hardware not found or driver missing. Ensure Intel AI Boost is enabled in BIOS.", flush=True)
+
+    if pipeline is None:
+        service_status = "ERROR"
+    return False
+
+def init_pipeline(model_path=None, retry_on_cache_fail=True):
     """Load the OpenVINO GenAI pipeline for the Intel NPU."""
     global pipeline, current_model_path, service_status
 
     target_path = model_path or os.environ.get("HMIR_MODEL_PATH", "qwen2.5-1.5b-ov")
     resolved_path = resolve_model_path(target_path)
 
+    if not os.path.exists(resolved_path):
+        print(f"[NPU-SERVICE] ERROR: Model path not found: {resolved_path}", flush=True)
+        service_status = "ERROR"
+        return False
+
+    print(f"[NPU-SERVICE] Loading model from: {resolved_path}", flush=True)
+    print("[NPU-SERVICE] Target device: NPU", flush=True)
+    service_status = "LOADING"
+
     try:
-        if not os.path.exists(resolved_path):
-            print(f"[NPU-SERVICE] ERROR: Model path not found: {resolved_path}", flush=True)
-            print(f"[NPU-SERVICE]   Searched: {target_path}", flush=True)
-            print(f"[NPU-SERVICE]   Also tried: {os.path.join(get_default_models_dir(), target_path)}", flush=True)
-            service_status = "ERROR"
-            return False
-
-        print(f"[NPU-SERVICE] Loading model from: {resolved_path}", flush=True)
-        print("[NPU-SERVICE] Target device: NPU", flush=True)
-        service_status = "LOADING"
-
         new_pipeline = LLMPipeline(resolved_path, "NPU")
         pipeline = new_pipeline
         current_model_path = resolved_path
@@ -68,11 +101,7 @@ def init_pipeline(model_path=None):
         print("[NPU-SERVICE] Model loaded successfully on NPU", flush=True)
         return True
     except Exception as e:
-        print(f"[NPU-SERVICE] CRITICAL - Failed to load on NPU: {e}", flush=True)
-        # Only clear pipeline if we don't have a working one
-        if pipeline is None:
-            service_status = "ERROR"
-        return False
+        return handle_pipeline_error(e, resolved_path, model_path, retry_on_cache_fail)
 
 async def handle_load_model(request):
     """Handle POST /v1/engine/load."""

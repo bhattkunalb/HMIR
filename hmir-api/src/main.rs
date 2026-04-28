@@ -139,30 +139,45 @@ fn log_event(msg: &str) {
     }
 }
 
-pub async fn list_installed_models() -> Json<Vec<String>> {
+pub async fn list_installed_models(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut models = Vec::new();
     let path = models_dir();
+    let active_now = state.active_model.lock().unwrap().clone();
 
     if let Ok(entries) = std::fs::read_dir(&path) {
         for entry in entries.flatten() {
+            let mut name = None;
+            let mut is_dir = false;
             if entry.path().is_dir() {
-                // Check for OpenVINO directories
-                if let Some(name) = entry.file_name().to_str() {
-                    models.push(name.to_string());
-                }
-                continue;
-            }
-            if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
+                name = entry.file_name().to_str().map(|s| s.to_string());
+                is_dir = true;
+            } else if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
                 let ext_l = ext.to_lowercase();
                 if ext_l == "gguf" || ext_l == "ov" || ext_l == "bin" {
-                    if let Some(name) = entry.file_name().to_str() {
-                        models.push(name.to_string());
-                    }
+                    name = entry.file_name().to_str().map(|s| s.to_string());
                 }
+            }
+
+            if let Some(n) = name {
+                let is_active = n == active_now;
+                let size_str = if is_dir {
+                    "Folder".to_string()
+                } else {
+                    format!(
+                        "{:.1} GB",
+                        (entry.metadata().map(|m| m.len()).unwrap_or(0) as f64) / 1_073_741_824.0
+                    )
+                };
+
+                models.push(serde_json::json!({
+                    "name": n,
+                    "active": is_active,
+                    "size": size_str
+                }));
             }
         }
     }
-    Json(models)
+    Json(serde_json::json!({ "models": models }))
 }
 
 pub async fn switch_model(

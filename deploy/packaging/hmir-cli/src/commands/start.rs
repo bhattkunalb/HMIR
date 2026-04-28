@@ -4,68 +4,106 @@ use tokio::process::Command;
 
 pub async fn start_daemon(port: u16, web: bool, model: Option<String>, no_browser: bool) {
     let bin_dir = current_bin_dir();
+    let client = reqwest::Client::new();
+    let unified_url = format!("http://127.0.0.1:{}", port);
 
     println!("🚀 HMIR ELITE | INITIALIZING INFERENCE NODE");
     println!("--------------------------------------------------");
 
-    // 1. Start NPU Execution Bridge (Python)
-    print!("⚙️ Activating hardware bridge... ");
-    if let Some(bridge_path) = resolve_script_path(&bin_dir, "hmir_npu_service.py") {
-        let bridge_proc = Command::new(resolve_python_command(&bin_dir))
-            .arg(&bridge_path)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
+    // 0. Pre-flight check: Is the port already in use?
+    print!("🔍 Checking port {} availability... ", port);
+    let is_busy = std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok();
 
-        match bridge_proc {
-            Ok(_) => println!("✅ [OK]"),
-            Err(e) => println!(
-                "⚠️ [WARN] Failed to spawn bridge: {}. HMIR will still try GPU/CPU paths.",
-                e
-            ),
+    if is_busy {
+        // Check if it's our own HMIR node
+        if let Ok(res) = client
+            .get(format!("{}/v1/health", unified_url))
+            .timeout(Duration::from_secs(2))
+            .send()
+            .await
+        {
+            if res.status().is_success() {
+                println!("✅ [ATTACHED]");
+                println!("💡 HMIR node is already running on this port. Using existing instance.");
+            } else {
+                println!("❌ [ERROR]");
+                println!("🛑 Port {} is occupied by another process that is NOT an HMIR node.", port);
+                println!("   Please free the port or use '--port <PORT>' to start on a different port.");
+                return;
+            }
+        } else {
+            println!("❌ [ERROR]");
+            println!("🛑 Port {} is blocked or occupied by a non-responsive process.", port);
+            return;
         }
     } else {
-        println!("⚠️ [WARN] No bridge script found. Continuing without Python bridge.");
-    }
+        println!("✅ [FREE]");
 
-    // 2. Start HMIR API Server
-    print!("🔌 Starting Inference API (port {})... ", port);
-    let api_path = bin_dir.join(executable_name("hmir-api"));
-    let mut api_cmd = Command::new(&api_path);
-    api_cmd.env("HMIR_PORT", port.to_string());
-    if let Some(m) = model {
-        api_cmd.env("HMIR_DEFAULT_MODEL", m);
-    }
+        // 1. Start NPU Execution Bridge (Python)
+        print!("⚙️ Activating hardware bridge... ");
+        if let Some(bridge_path) = resolve_script_path(&bin_dir, "hmir_npu_service.py") {
+            let bridge_proc = Command::new(resolve_python_command(&bin_dir))
+                .arg(&bridge_path)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
 
-    match api_cmd.spawn() {
-        Ok(_) => {
-            // Health check loop
-            let client = reqwest::Client::new();
-            let mut success = false;
-            for _i in 1..=10 {
-                tokio::time::sleep(Duration::from_millis(1000)).await;
-                if let Ok(res) = client
-                    .get(format!("http://127.0.0.1:{}/v1/health", port))
-                    .send()
-                    .await
-                {
-                    if res.status().is_success() {
-                        success = true;
-                        break;
-                    }
-                }
-                print!(".");
-                let _ = std::io::Write::flush(&mut std::io::stdout());
+            match bridge_proc {
+                Ok(_) => println!("✅ [OK]"),
+                Err(e) => println!(
+                    "⚠️ [WARN] Failed to spawn bridge: {}. HMIR will still try GPU/CPU paths.",
+                    e
+                ),
             }
-            if success {
-                println!("✅ [OK]");
-            } else {
-                println!("⚠️ [WARN] API started but health-check timed out. Check logs.");
-            }
+        } else {
+            println!("⚠️ [WARN] No bridge script found. Continuing without Python bridge.");
         }
-        Err(e) => {
-            println!("❌ [ERROR] Failed to start API: {}", e);
-            return;
+
+        // 2. Start HMIR API Server
+        print!("🔌 Starting Inference API (port {})... ", port);
+        let api_path = bin_dir.join(executable_name("hmir-api"));
+        let mut api_cmd = Command::new(&api_path);
+        api_cmd.env("HMIR_PORT", port.to_string());
+        if let Some(m) = model {
+            api_cmd.env("HMIR_DEFAULT_MODEL", m);
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const DETACHED_PROCESS: u32 = 0x00000008;
+            api_cmd.creation_flags(DETACHED_PROCESS);
+        }
+
+        match api_cmd.spawn() {
+            Ok(_) => {
+                // Health check loop
+                let mut success = false;
+                for _i in 1..=30 {
+                    tokio::time::sleep(Duration::from_millis(1000)).await;
+                    if let Ok(res) = client
+                        .get(format!("{}/v1/health", unified_url))
+                        .send()
+                        .await
+                    {
+                        if res.status().is_success() {
+                            success = true;
+                            break;
+                        }
+                    }
+                    print!(".");
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                }
+                if success {
+                    println!("✅ [OK]");
+                } else {
+                    println!("⚠️ [WARN] API started but health-check timed out. Check logs.");
+                }
+            }
+            Err(e) => {
+                println!("❌ [ERROR] Failed to start API: {}", e);
+                return;
+            }
         }
     }
 
@@ -74,7 +112,7 @@ pub async fn start_daemon(port: u16, web: bool, model: Option<String>, no_browse
         print!("🖥️ Launching Native Dashboard... ");
         let dash_path = bin_dir.join(executable_name("hmir-dashboard"));
         match Command::new(&dash_path)
-            .env("HMIR_API_BASE_URL", format!("http://127.0.0.1:{}", port))
+            .env("HMIR_API_BASE_URL", &unified_url)
             .spawn()
         {
             Ok(_) => println!("✅ [OK]"),
@@ -83,7 +121,6 @@ pub async fn start_daemon(port: u16, web: bool, model: Option<String>, no_browse
     }
 
     // 4. Auto-Open Web Portal only for browser-first flow
-    let unified_url = format!("http://127.0.0.1:{}", port);
     if web && !no_browser {
         println!("🌐 Auto-opening Web Console: {}", unified_url);
         tokio::time::sleep(Duration::from_secs(2)).await;
