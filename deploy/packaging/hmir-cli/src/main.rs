@@ -4,7 +4,7 @@ mod commands;
 
 const LONG_ABOUT: &str = "HMIR is a local heterogeneous inference runtime.\n\nIt exposes one OpenAI-compatible local API across NPU, GPU, and CPU so local apps and editors can use the same endpoint without manual device juggling.";
 
-const AFTER_HELP: &str = "Examples:\n  hmir suggest\n  hmir pull qwen2.5-1.5b-ov\n  hmir start --dashboard --model qwen2.5-1.5b-ov\n  hmir start --no-browser --port 8080\n  hmir integrations --model llama3.2-3b\n  hmir logs --tail 200 --grep ERROR\n\nOpenAI-compatible clients should use:\n  Base URL: http://127.0.0.1:8080/v1\n  API Key : hmir-local";
+const AFTER_HELP: &str = "Examples:\n  hmir suggest\n  hmir status\n  hmir pull qwen2.5-1.5b-ov\n  hmir start --model qwen2.5-1.5b-ov\n  hmir start --headless --port 8080\n  hmir integrations --model llama3.2-3b\n  hmir logs --tail 200 --grep ERROR\n\nOpenAI-compatible clients should use:\n  Base URL: http://127.0.0.1:8080/v1\n  API Key : hmir-local";
 
 #[derive(Parser)]
 #[command(name = "hmir")]
@@ -25,6 +25,12 @@ enum Commands {
         /// The optimization strategy (latency, throughput, battery)
         #[arg(short, long, default_value = "latency")]
         strategy: String,
+    },
+    /// Check the status of the local HMIR runtime and active models
+    Status {
+        /// The API port to check
+        #[arg(short, long)]
+        port: Option<u16>,
     },
     /// Pull a model from the registry
     Pull {
@@ -101,6 +107,11 @@ async fn main() {
             println!("🚀 HMIR Hardware Intelligence");
             let recommender = commands::suggest::ModelRecommender::new();
             recommender.suggest(&strategy).await;
+        }
+        Commands::Status { port } => {
+            let config = hmir_core::config::HmirConfig::load();
+            let final_port = port.unwrap_or(config.api_port);
+            commands::status::run_status(final_port).await;
         }
         Commands::Pull { model } => {
             println!("📥 HMIR Model Downloader");

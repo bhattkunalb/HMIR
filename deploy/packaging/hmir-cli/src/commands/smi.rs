@@ -1,6 +1,6 @@
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
-use comfy_table::{Table, Row, Cell, Color as TableColor, Attribute};
+use comfy_table::{Table, Cell, Color as TableColor, Attribute};
 use colored::Colorize;
 use serde_json::Value;
 use std::time::Duration;

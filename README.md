@@ -4,144 +4,56 @@
 
 > **The Universal Local Inference Engine for the AI PC Era.**
 >
-> HMIR (Heterogeneous Model Inference Runtime) is a unified inference platform that orchestrates LLMs across **NPU, GPU, and CPU** with NPU-first scheduling and transparent fallback. Stop juggling backend-specific SDKs and start targeting one universal local endpoint.
-
-## 🌟 The Mission
-
-Local LLM deployment is fragmented. One tool excels at NVIDIA CUDA, another at Intel OpenVINO, and CPU fallback is often an afterthought. Developers end up juggling device-specific SDKs instead of focusing on their applications.
-
-**HMIR closes this gap.** We provide a **single, hardware-aware abstraction layer** that:
-
-- **Prioritizes Efficiency**: Runs on the NPU (AI Boost) by default to save battery and keep your GPU free.
-- **Zero-Config Fallback**: Automatically spills over to iGPU or CPU if the NPU is overloaded or incompatible.
-- **OpenAI Compatible**: Drop-in replacement for any app using the OpenAI SDK.
-- **Real-time Telemetry**: Full visibility into hardware utilization across all silicon engines.
-
-### Why HMIR Elite?
-
-HMIR is built as a multi-tier orchestration layer, separating high-performance routing logic from vendor-specific acceleration bridges. It handles the "device capability detection", "plan scoring", and "execution routing" so you don't have to.
-
-## 🚀 Hardware Scope
-
-HMIR is designed for the modern AI PC, prioritizing dedicated silicon to keep your system responsive while providing universal fallback for cross-platform stability.
-
-### 🧠 Deep Hardware Integration
-
-- **Intel NPU (AI Boost)**: Optimized via OpenVINO for low-power background inference.
-- **Apple Silicon (ANE)**: Native Core ML support for high-efficiency Neural Engine execution.
-- **NVIDIA RT/Tensor Cores**: High-performance CUDA-accelerated fallback.
-- **AMD Ryzen AI**: Emerging support for XDNA-based NPUs via MIGraphX/ROCm.
-- **Qualcomm Hexagon**: Specialized support for Snapdragon X Elite systems.
-
-### 📊 Support Matrix
-
-HMIR automatically routes your model to the most efficient compute unit available. Below is the mapping of hardware vendors to their respective optimization stacks and engines.
-
-#### Acceleration Layer
-
-| Vendor | Compiler | Runtime |
-| :--- | :--- | :--- |
-| **Intel** | OpenVINO | OpenVINO |
-| **NVIDIA** | TensorRT | TensorRT |
-| **AMD** | MIGraphX | ROCm |
-| **Qualcomm** | QNN | SNPE |
-| **Apple** | Core ML tools | Core ML runtime |
-
-#### Platform & Engine Mapping
-
-| Platform | Devices | “Engine” (Abstraction Layer) |
-| :--- | :--- | :--- |
-| **Intel** | NPU (AI Boost), iGPU, CPU | **OpenVINO** |
-| **NVIDIA** | CUDA GPU, CPU | **TensorRT** (+ CUDA) |
-| **AMD** | GPU, CPU (+ emerging NPU) | **MIGraphX** (+ ROCm) |
-| **Apple Silicon** | Neural Engine (NPU), GPU, CPU | **Core ML** |
-| **Qualcomm AI PC** | Hexagon NPU, GPU, CPU | **Qualcomm AI Engine SDK** (+ SNPE / QNN) |
-| **Windows (cross-vendor)** | GPU, NPU, CPU | **DirectML** |
-| **CPU-only (universal)** | CPU | **ONNX Runtime** |
-
-> [!TIP]
-> HMIR uses a tiered scoring system to select the best "Engine" based on your local silicon configuration. On Intel systems, the **OpenVINO** engine is prioritized for NPU-first execution.
-> [!NOTE]
-> For optimal NPU performance on Intel hardware, always look for models with the `-ov` or `OpenVINO` suffix.
+> HMIR (Heterogeneous Model Inference Runtime) is a unified, production-grade inference platform designed to orchestrate Large Language Models across **NPU, GPU, and CPU**. With an **NPU-first** scheduling philosophy, HMIR maximizes battery life and system responsiveness while providing transparent, high-performance fallback to discrete or integrated graphics.
 
 ---
 
-## Command Reference
+## 🌟 The HMIR Advantage
 
-The design goal is simple:
+Local LLM deployment is often a trade-off between performance and efficiency. HMIR eliminates this friction by providing a **single, hardware-aware abstraction layer** that handles the complexities of modern silicon.
 
-- prefer `NPU` when it is available and the model fits
-- fall back to `GPU`, then `CPU`, without manual reconfiguration
-- keep the serving surface OpenAI-compatible
-- make backend choice visible and explainable
-- provide one-click maintenance via `hmir clean`
+- **🚀 NPU-First Execution**: Automatically targets Intel AI Boost (NPU) and Apple Neural Engine (ANE) for ultra-low power background inference.
+- **🛡️ Intelligent Fallback**: If the primary accelerator is overloaded or incompatible, HMIR seamlessly spills over to the GPU or CPU.
+- **🔌 OpenAI Compatible**: A drop-in replacement for any application using the OpenAI SDK. Use your favorite tools (Cursor, Open WebUI, etc.) with local silicon.
+- **📊 Unified Telemetry**: Real-time visibility into NPU, GPU, and CPU utilization through the `hmir smi` tool and native dashboards.
+- **⚡ Self-Healing Runtime**: Automatic recovery from port conflicts, stale hardware caches, and corrupt model weights.
 
-Full production architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+---
 
-## One-Command Install
+## 🏗️ Hardware Scope & Architecture
 
-### Windows (Recommended)
+HMIR is built for the "AI PC" generation. It doesn't just run on your hardware; it understands it.
 
-> [!TIP]
-> Run PowerShell as **Administrator** for optimal NPU driver access and system path integration.
+### 🧠 Deep Silicon Integration
 
-```powershell
-irm https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.ps1 | iex
-```
+| Vendor | Component | Optimization Stack | Primary Engine |
+| :--- | :--- | :--- | :--- |
+| **Intel** | Core Ultra NPU / Arc GPU | OpenVINO | `ov-npu` / `ov-gpu` |
+| **Apple** | Neural Engine / M-Series GPU | Core ML / Metal | `metal` / `ane` |
+| **NVIDIA** | RTX Tensor Cores | TensorRT / CUDA | `cuda` |
+| **AMD** | Ryzen AI / Radeon GPU | MIGraphX / ROCm | `rocm` |
+| **Qualcomm** | Hexagon NPU | QNN / SNPE | `qnn` |
 
-### Linux / macOS (Beta)
+### 📊 Model Compatibility Matrix
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | bash
-```
+To get the best performance, use models optimized for your specific silicon:
 
-The installer will:
+| Optimization | Target Hardware | Recommended Backend | Suffix Hint |
+| :--- | :--- | :--- | :--- |
+| **OpenVINO (INT4/8)** | Intel NPU / iGPU | `hmir-sys-ov` | `-ov` |
+| **GGUF (Q4_K_M/Q8)** | NVIDIA GPU / Apple / CPU | `hmir-sys-llama` | `.gguf` |
+| **MLX / CoreML** | Apple Silicon | `hmir-sys-apple` | `-mlx` |
+| **TensorRT** | NVIDIA RTX | `hmir-sys-trt` | `-trt` |
 
-1. Install Rust toolchain (if not present)
-2. Create a Python virtual environment with OpenVINO GenAI dependencies
-3. Build the Web Console static assets
-4. Build all HMIR binaries from source
-5. Add `hmir` to your PATH
+---
 
-After install, HMIR probes local hardware automatically and routes across `NPU`, `GPU`, and `CPU`.
+## 🏗️ Technical Architecture
 
-## ⚡ Features
+HMIR is structured as a multi-tier orchestration layer, ensuring that high-level API logic remains decoupled from low-level hardware drivers.
 
-- **Cross-Platform**: Native binaries for `Windows`, `Linux`, and `macOS`.
-- **Silicon-Aware**: Tiered `NPU -> GPU -> CPU` scheduling with transparent fallback.
-- **Pluggable Backends**: Built-in support for `OpenVINO`, `llama.cpp`, and `DirectML`.
-- **Premium Dashboards**:
-  - **Web Console**: Browser-based telemetry, chat, and model management.
-  - **Native Dashboard**: Lightweight desktop GUI for system-tray control.
-- **Self-Healing**: Automatic cache recovery and port-conflict "attach" logic.
-- **API First**: OpenAI-compatible `/v1/chat/completions` endpoint.
-- **Live Telemetry**: Real-time polling of NPU, GPU, CPU, RAM, and Disk.
-- **SMI Tool**: High-fidelity terminal monitoring via `hmir smi`.
-- **Persistent Config**: Easy port and performance management via `config.toml`.
-
-## 🏗️ Architecture
-
-HMIR is built as a multi-tier orchestration layer, separating high-performance routing logic from vendor-specific acceleration bridges. The stack consists of:
-
-### 1. The Rust Orchestrator (`hmir-core`)
-
-The brain of the system. It handles:
-
-- **Telemetry Aggregation**: High-frequency polling of NPU, GPU, and CPU load.
-- **NPU-First Scheduler**: Scores candidate devices based on available memory, power profile, and model compatibility.
-- **Request Routing**: Proxies OpenAI-compatible requests to the active execution bridge.
-
-### 2. The Execution Bridges (`hmir-sys`)
-
-Lean, specialized workers that interface with native hardware SDKs:
-
-- **OpenVINO Bridge**: A Python-based worker using `openvino-genai` for low-latency NPU/iGPU execution.
-- **llama.cpp Bridge**: A native C++ binding for high-compatibility GGUF execution on CUDA/Metal/CPU.
-
-### 3. The UI Layer
-
-- **Web Console**: A premium, browser-based dashboard at `http://localhost:8080`.
-- **Native Dashboard**: A lightweight desktop GUI for system-tray control and rapid chat.
+1. **The Orchestrator (`hmir-core`)**: Handles telemetry aggregation, NPU-first scheduling, and model lifecycle management.
+2. **The Execution Bridges (`hmir-sys`)**: Lean, specialized worker processes that wrap vendor SDKs (OpenVINO, llama.cpp, etc.).
+3. **The Control Plane (`hmir-cli` & `hmir-dashboard`)**: Provides high-fidelity monitoring and persistent configuration management.
 
 ```mermaid
 graph TD

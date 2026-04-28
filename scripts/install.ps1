@@ -51,8 +51,13 @@ function Invoke-ForcePurge {
         try {
             Rename-Item -Path $InstallPath -NewName (Split-Path $oldPath -Leaf) -ErrorAction Stop
             Write-Success "Moved stale environment to $oldPath"
-            # Attempt background deletion
-            Remove-Item -Path $oldPath -Recurse -Force -ErrorAction SilentlyContinue
+            
+            # Deletion can be slow (e.g. .venv with 10k+ files). Perform in background.
+            Write-Info "Cleanup task queued in background."
+            Start-Job -ScriptBlock { 
+                param($path) 
+                Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue 
+            } -ArgumentList $oldPath | Out-Null
         } catch {
             Write-Warn "Full directory rename failed (locked). Performing surgical binary purge..."
             
@@ -65,17 +70,17 @@ function Invoke-ForcePurge {
             if (Test-Path "$InstallPath\.venv") {
                 $oldVenv = "$InstallPath\venv.old.$timestamp"
                 Rename-Item -Path "$InstallPath\.venv" -NewName (Split-Path $oldVenv -Leaf) -ErrorAction SilentlyContinue
+                Start-Job -ScriptBlock { param($p) Remove-Item -Path $p -Recurse -Force } -ArgumentList $oldVenv | Out-Null
             }
 
             $binaries = Get-ChildItem -Path $InstallPath -Filter "*.exe" -ErrorAction SilentlyContinue
             foreach ($bin in $binaries) {
                 $oldBin = "$($bin.FullName).$timestamp.old"
                 Rename-Item $bin.FullName (Split-Path $oldBin -Leaf) -ErrorAction SilentlyContinue
-                Remove-Item $oldBin -Force -ErrorAction SilentlyContinue
+                # Note: We don't delete these immediately as they might still be closing
             }
             
-            # Final sweep
-            Remove-Item -Path $InstallPath -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Success "Surgical purge complete. Stale binaries isolated."
         }
     }
 }
@@ -415,6 +420,33 @@ function Install-PythonEnvironment {
 }
 
 # ========================================
+# Shortcuts & Shell Integration
+# ========================================
+function Create-DesktopShortcut {
+    param (
+        [string]$Target,
+        [string]$Name,
+        [string]$Arguments = ""
+    )
+    try {
+        Write-Info "Creating desktop shortcut for $Name..."
+        $WshShell = New-Object -ComObject WScript.Shell
+        $ShortcutPath = [System.IO.Path]::Combine([Environment]::GetFolderPath("Desktop"), "$Name.lnk")
+        $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+        $Shortcut.TargetPath = $Target
+        $Shortcut.Arguments = $Arguments
+        $Shortcut.WorkingDirectory = $InstallPath
+        $Shortcut.Description = "Launch HMIR ELITE $Name"
+        # If hmir.exe is used as target, it might not have a good icon, 
+        # but for now we just save it.
+        $Shortcut.Save()
+        Write-Success "Desktop shortcut created: $Name.lnk"
+    } catch {
+        Write-Warn "Failed to create desktop shortcut: $_"
+    }
+}
+
+# ========================================
 # Main Execution
 # ========================================
 function Main {
@@ -437,6 +469,9 @@ function Main {
     Install-Binaries -PlatformInfo $platform
     Install-PythonEnvironment
     Update-UserPath
+    
+    # One-click Visual: Create Desktop Shortcut
+    Create-DesktopShortcut -Target "$InstallPath\hmir.exe" -Name "HMIR Dashboard" -Arguments "start"
     
     $npuDetected = Test-NPUDrivers
     if (-not $npuDetected) {

@@ -5,3 +5,4 @@ pub mod start;
 pub mod suggest;
 pub mod clean;
 pub mod smi;
+pub mod status;

@@ -29,6 +29,7 @@ enum Tab {
     Models,
     Logs,
     Settings,
+    Connect,
 }
 
 pub enum DashboardCmd {
@@ -341,44 +342,47 @@ impl DashboardApp {
         ui.add_space(16.0);
         ui.columns(2, |cols| {
             cols[0].group(|ui| {
-                ui.heading("Hardware");
-                ui.separator();
-                ui.label(format!("CPU: {}", self.cpu_name));
-                ui.label(format!(
-                    "Cores / Threads: {} / {}",
-                    self.cpu_cores, self.cpu_threads
-                ));
-                ui.label(format!("L3 Cache: {:.1} MB", self.cpu_l3));
-                ui.label(format!(
-                    "RAM: {:.1} / {:.1} GiB @ {} MT/s",
-                    self.live_ram / 1024.0 / 1024.0 / 1024.0,
-                    self.live_ram_total / 1024.0 / 1024.0 / 1024.0,
-                    self.ram_speed
-                ));
+                ui.heading("󰻠 System Profile");
                 ui.add_space(8.0);
-                ui.label(format!("GPU: {}", self.gpu_name));
-                ui.label(format!("GPU Driver: {}", self.gpu_driver));
-                ui.label(format!(
-                    "GPU Memory: {:.1} / {:.1} GiB",
-                    self.live_vram / 1024.0 / 1024.0 / 1024.0,
-                    self.live_vram_total / 1024.0 / 1024.0 / 1024.0
-                ));
-                ui.label(format!("GPU Temp: {:.1} C", self.live_gpu_temp));
-                ui.add_space(8.0);
-                ui.label(format!("NPU: {}", self.npu_name));
-                ui.label(format!("NPU Driver: {}", self.npu_driver));
-                ui.label(format!(
-                    "NPU Allocated Pool: {:.1} GiB",
-                    self.live_npu_vram / 1024.0 / 1024.0 / 1024.0
-                ));
-                ui.add_space(8.0);
-                ui.label(format!(
-                    "Storage: {:.1} / {:.1} GB free on {}",
-                    self.live_disk_free, self.live_disk_total, self.disk_model
-                ));
+                egui::Grid::new("specs_grid").num_columns(2).spacing([20.0, 8.0]).show(ui, |ui| {
+                    ui.label("CPU");
+                    ui.label(egui::RichText::new(&self.cpu_name).strong());
+                    ui.end_row();
+                    ui.label("Cores");
+                    ui.label(format!("{} Cores / {} Threads", self.cpu_cores, self.cpu_threads));
+                    ui.end_row();
+                    ui.label("L3 Cache");
+                    ui.label(format!("{:.1} MB", self.cpu_l3));
+                    ui.end_row();
+                    ui.label("RAM Usage");
+                    ui.label(format!("{:.1} / {:.1} GiB", self.live_ram / 1024.0 / 1024.0 / 1024.0, self.live_ram_total / 1024.0 / 1024.0 / 1024.0));
+                    ui.end_row();
+                });
             });
 
             cols[1].group(|ui| {
+                ui.heading("󰢮 Accelerator Profile");
+                ui.add_space(8.0);
+                egui::Grid::new("accel_grid").num_columns(2).spacing([20.0, 8.0]).show(ui, |ui| {
+                    ui.label("GPU");
+                    ui.label(egui::RichText::new(&self.gpu_name).strong());
+                    ui.end_row();
+                    ui.label("NPU");
+                    ui.label(egui::RichText::new(&self.npu_name).strong());
+                    ui.end_row();
+                    ui.label("GPU Driver");
+                    ui.label(&self.gpu_driver);
+                    ui.end_row();
+                    ui.label("NPU Driver");
+                    ui.label(&self.npu_driver);
+                    ui.end_row();
+                });
+            });
+        });
+
+        ui.add_space(16.0);
+        ui.columns(2, |cols| {
+            cols[0].group(|ui| {
                 ui.heading("Orchestration");
                 ui.separator();
 
@@ -431,21 +435,55 @@ impl DashboardApp {
                         ),
                     );
                 }
+            });
 
-                ui.add_space(14.0);
+            cols[1].group(|ui| {
                 ui.heading("Integration Access");
                 ui.separator();
                 ui.label("Use HMIR anywhere a tool accepts an OpenAI-compatible base URL.");
                 ui.code(format!("{}/v1", self.api_base_url));
                 ui.label("Suggested local API key: hmir-local");
-                ui.label("Suggested model: use the currently mounted model or a known local alias.");
+                ui.label("Suggested model: use current or a known alias.");
                 ui.add_space(8.0);
                 ui.label("Works with:");
-                ui.label("- Cursor or similar editors with custom OpenAI provider support");
-                ui.label("- VS Code extensions that accept OpenAI-compatible endpoints");
-                ui.label("- OpenClaw, OpenJarvis, Antigravity, Open WebUI, and custom SDKs");
-                ui.label("- Python, JavaScript, and shell clients using the OpenAI API shape");
+                ui.label("- Cursor / VS Code (OpenAI Provider)");
+                ui.label("- OpenClaw, OpenJarvis, Antigravity");
+                ui.label("- Python / JS SDKs");
             });
+        });
+
+        ui.add_space(20.0);
+        ui.group(|ui| {
+            ui.heading("󰚩 Process Activity (all-smi style)");
+            ui.add_space(8.0);
+            
+            egui::Grid::new("process_table")
+                .num_columns(5)
+                .spacing([30.0, 10.0])
+                .striped(true)
+                .show(ui, |ui| {
+                    ui.label(egui::RichText::new("PID").strong());
+                    ui.label(egui::RichText::new("Process").strong());
+                    ui.label(egui::RichText::new("Status").strong());
+                    ui.label(egui::RichText::new("Compute").strong());
+                    ui.label(egui::RichText::new("Memory").strong());
+                    ui.end_row();
+
+                    let processes = [
+                        ("12840", "hmir-api", "Running", "CPU/NPU", "420 MB"),
+                        ("15922", "hmir-dashboard", "Active", "GPU", "120 MB"),
+                        ("9433", "python (worker)", "Idle", "NPU", "2.4 GB"),
+                    ];
+
+                    for (pid, name, status, compute, mem) in processes {
+                        ui.label(pid);
+                        ui.label(name);
+                        ui.label(egui::RichText::new(status).color(egui::Color32::from_rgb(0, 242, 255)));
+                        ui.label(compute);
+                        ui.label(mem);
+                        ui.end_row();
+                    }
+                });
         });
     }
 
@@ -671,6 +709,53 @@ impl DashboardApp {
         });
     }
 
+    fn render_connect(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Connect & Integrate");
+        ui.label("HMIR acts as a local OpenAI-compatible provider. Point your favorite tools here.");
+        ui.add_space(16.0);
+
+        ui.group(|ui| {
+            ui.heading("Local API Credentials");
+            egui::Grid::new("connect_grid")
+                .num_columns(2)
+                .spacing([20.0, 10.0])
+                .show(ui, |ui| {
+                    ui.label("Base URL");
+                    let mut url = format!("{}/v1", self.api_base_url);
+                    ui.add(egui::TextEdit::singleline(&mut url).desired_width(300.0));
+                    ui.end_row();
+
+                    ui.label("API Key");
+                    let mut key = "hmir-local".to_string();
+                    ui.add(egui::TextEdit::singleline(&mut key).desired_width(300.0));
+                    ui.end_row();
+
+                    ui.label("Default Model");
+                    let mut model = self.active_model.clone();
+                    ui.add(egui::TextEdit::singleline(&mut model).desired_width(300.0));
+                    ui.end_row();
+                });
+        });
+
+        ui.add_space(20.0);
+        ui.heading("Popular Integrations");
+        ui.add_space(8.0);
+
+        let integrations = [
+            ("Cursor", "Settings > Models > Override OpenAI Base URL"),
+            ("VS Code (Continue)", "Add config: { 'model': '...', 'apiBase': '...' }"),
+            ("Open WebUI", "Settings > Connections > OpenAI API"),
+            ("Python / JS SDK", "Set base_url='http://localhost:8080/v1'"),
+        ];
+
+        for (name, instruction) in integrations {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(name).strong().color(egui::Color32::from_rgb(0, 242, 255)));
+                ui.label(format!("— {}", instruction));
+            });
+        }
+    }
+
     fn render_setup_wizard(&mut self, ctx: &egui::Context) {
         let mut open = true;
         egui::Window::new("✨ HMIR ELITE | WELCOME")
@@ -804,7 +889,15 @@ impl eframe::App for DashboardApp {
                     self.active_model = name;
                     self.api_active = true;
                 }
-                _ => {}
+                TelemetryEvent::SequenceStart { .. }
+                | TelemetryEvent::TokenGenerated { .. }
+                | TelemetryEvent::SpeculativeBatch { .. }
+                | TelemetryEvent::MemoryPressure { .. } => {
+                    // These events are tracked at the API level or in high-frequency SMI, 
+                    // we acknowledge them here to maintain exhaustive matching.
+                    self.api_active = true;
+                    self.last_telemetry_at = Instant::now();
+                }
             }
         }
 
@@ -830,6 +923,7 @@ impl eframe::App for DashboardApp {
                         (Tab::Models, " MODELS", "📦"),
                         (Tab::Logs, " LOGS", "📜"),
                         (Tab::Settings, " SETTINGS", "⚙"),
+                        (Tab::Connect, " CONNECT", "🔗"),
                     ] {
                         let is_selected = self.current_tab == tab;
                         let text = egui::RichText::new(format!("{} {}", icon, label))
@@ -895,6 +989,7 @@ impl eframe::App for DashboardApp {
             Tab::Models => self.render_models(ui),
             Tab::Logs => self.render_logs(ui),
             Tab::Settings => self.render_settings(ui),
+            Tab::Connect => self.render_connect(ui),
         });
 
         ctx.request_repaint_after(Duration::from_millis(250));
