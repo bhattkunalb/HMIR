@@ -19,16 +19,32 @@ Local LLM deployment is fragmented. One tool excels at NVIDIA CUDA, another at I
 
 ## 🚀 Model & Hardware Matrix
 
-HMIR automatically routes your model to the most efficient compute unit available.
+HMIR automatically routes your model to the most efficient compute unit available. Below is the mapping of hardware vendors to their respective optimization stacks and engines.
 
-| Target HW | Engine | Preferred Format | Optimization | Example Models |
-| :--- | :--- | :--- | :--- | :--- |
-| **Intel NPU** | OpenVINO GenAI | OpenVINO IR | INT4 / Weight Compression | `qwen2.5-ov`, `phi3-mini-ov` |
-| **Intel iGPU** | OpenVINO GenAI | OpenVINO IR | FP16 / INT8 | `phi3-mini-ov`, `llama3-ov` |
-| **NVIDIA GPU** | llama.cpp (CUDA) | GGUF | Q4_K_M / Q8_0 | `llama3.2-3b`, `mistral-v0.3` |
-| **Apple M-Series** | llama.cpp (Metal) | GGUF | Q4_0 / Q5_K_M | `phi3-medium`, `llama3.2` |
-| **AMD GPU** | llama.cpp (ROCm) | GGUF | Q4_K_M | `deepseek-v2-lite` |
-| **System CPU** | llama.cpp (AVX/AMX) | GGUF | Q4_K_M / Q2_K | *Any supported GGUF model* |
+### Hardware Acceleration Layer
+
+| Vendor | Compiler | Runtime |
+| :--- | :--- | :--- |
+| **Intel** | OpenVINO | OpenVINO |
+| **NVIDIA** | TensorRT | TensorRT |
+| **AMD** | MIGraphX | ROCm |
+| **Qualcomm** | QNN | SNPE |
+| **Apple** | Core ML tools | Core ML runtime |
+
+### Platform & Engine Mapping
+
+| Platform | Devices | “Engine” (Abstraction Layer) |
+| :--- | :--- | :--- |
+| **Intel** | NPU (AI Boost), iGPU, CPU | **OpenVINO** |
+| **NVIDIA** | CUDA GPU, CPU | **TensorRT** (+ CUDA) |
+| **AMD** | GPU, CPU (+ emerging NPU) | **MIGraphX** (+ ROCm) |
+| **Apple Silicon** | Neural Engine (NPU), GPU, CPU | **Core ML** |
+| **Qualcomm AI PC** | Hexagon NPU, GPU, CPU | **Qualcomm AI Engine SDK** (+ SNPE / QNN) |
+| **Windows (cross-vendor)** | GPU, NPU, CPU | **DirectML** |
+| **CPU-only (universal)** | CPU | **ONNX Runtime** |
+
+> [!TIP]
+> HMIR uses a tiered scoring system to select the best "Engine" based on your local silicon configuration. On Intel systems, the **OpenVINO** engine is prioritized for NPU-first execution.
 
 > [!NOTE]
 > For optimal NPU performance on Intel hardware, always look for models with the `-ov` or `OpenVINO` suffix.
