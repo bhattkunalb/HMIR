@@ -36,29 +36,46 @@ function Invoke-ForcePurge {
         if ($procs) {
             Write-Warn "Force killing active process: $t"
             $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 300 # Give OS time to release file handles
         }
     }
 
-    # 2. Hard Purge Binaries (Rename-to-Delete strategy for locked files)
+    # 2. Robust Directory Purge (Rename-to-Delete strategy)
     if (Test-Path $InstallPath) {
-        Write-Info "Executing Rename-to-Delete purge in $InstallPath..."
-
-        # Clean scripts if they exist
-        if (Test-Path "$InstallPath\scripts") {
-            Remove-Item -Path "$InstallPath\scripts" -Recurse -Force -ErrorAction SilentlyContinue
-        }
-
-        $binaries = Get-ChildItem -Path $InstallPath -Filter "*.exe" -ErrorAction SilentlyContinue
-        foreach ($bin in $binaries) {
-            try {
-                # Attempt direct delete
-                Remove-Item $bin.FullName -Force -ErrorAction Stop
-            } catch {
-                # If locked, rename it to .old then try delete again
-                $oldName = "$($bin.FullName).$((Get-Date).Ticks).old"
-                Rename-Item $bin.FullName $oldName -ErrorAction SilentlyContinue
-                Remove-Item $oldName -Force -ErrorAction SilentlyContinue
+        $timestamp = (Get-Date).Ticks
+        $oldPath = "$InstallPath.old.$timestamp"
+        
+        Write-Info "Executing robust purge for $InstallPath..."
+        
+        # Strategy A: Rename the entire directory (Nearly instantaneous even with some locks)
+        try {
+            Rename-Item -Path $InstallPath -NewName (Split-Path $oldPath -Leaf) -ErrorAction Stop
+            Write-Success "Moved stale environment to $oldPath"
+            # Attempt background deletion
+            Remove-Item -Path $oldPath -Recurse -Force -ErrorAction SilentlyContinue
+        } catch {
+            Write-Warn "Full directory rename failed (locked). Performing surgical binary purge..."
+            
+            # Strategy B: Rename individual scripts and binaries
+            if (Test-Path "$InstallPath\scripts") {
+                $oldScripts = "$InstallPath\scripts.old.$timestamp"
+                Rename-Item -Path "$InstallPath\scripts" -NewName (Split-Path $oldScripts -Leaf) -ErrorAction SilentlyContinue
             }
+
+            if (Test-Path "$InstallPath\.venv") {
+                $oldVenv = "$InstallPath\venv.old.$timestamp"
+                Rename-Item -Path "$InstallPath\.venv" -NewName (Split-Path $oldVenv -Leaf) -ErrorAction SilentlyContinue
+            }
+
+            $binaries = Get-ChildItem -Path $InstallPath -Filter "*.exe" -ErrorAction SilentlyContinue
+            foreach ($bin in $binaries) {
+                $oldBin = "$($bin.FullName).$timestamp.old"
+                Rename-Item $bin.FullName (Split-Path $oldBin -Leaf) -ErrorAction SilentlyContinue
+                Remove-Item $oldBin -Force -ErrorAction SilentlyContinue
+            }
+            
+            # Final sweep
+            Remove-Item -Path $InstallPath -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }
