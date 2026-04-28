@@ -5,6 +5,7 @@ pub async fn run_clean() {
     println!("🧹 HMIR | COMMENCING RUNTIME CLEANUP");
     
     // 1. Resolve cache directory
+    // cspell:ignore USERPROFILE
     let home = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
     let hmir_models_dir = std::path::Path::new(&home).join(".hmir").join("models");
     let local_app_data_hmir = std::env::var("LOCALAPPDATA")

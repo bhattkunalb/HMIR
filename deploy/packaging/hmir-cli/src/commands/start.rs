@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::process::Command;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 
 pub async fn start_daemon(port: u16, web: bool, model: Option<String>, no_browser: bool) {
     let bin_dir = current_bin_dir();
