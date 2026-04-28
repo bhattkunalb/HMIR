@@ -43,6 +43,8 @@ pub struct AppState {
     pub log_bus: broadcast::Sender<String>,
     pub start_time: std::time::Instant,
     pub client: reqwest::Client,
+    pub hardware_history: Arc<Mutex<VecDeque<serde_json::Value>>>,
+    pub latest_hardware: Arc<Mutex<serde_json::Value>>,
 }
 
 #[derive(Deserialize)]
@@ -484,6 +486,20 @@ async fn health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "healthy", "engine": "NPU-Proxy-Active"}))
 }
 
+async fn get_hardware_snapshot(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    let snapshot = state.latest_hardware.lock().unwrap().clone();
+    Json(snapshot)
+}
+
+async fn get_hardware_history(
+    State(state): State<AppState>,
+) -> Json<Vec<serde_json::Value>> {
+    let history = state.hardware_history.lock().unwrap().clone();
+    Json(history.into_iter().collect())
+}
+
 async fn serve_web_ui() -> Html<&'static str> {
     Html(include_str!("index.html"))
 }
@@ -524,6 +540,11 @@ async fn main() {
     let active_model = Arc::new(Mutex::new("None".to_string()));
     let engine_status = Arc::new(Mutex::new("Unmounted".to_string()));
 
+    let hardware_history: Arc<Mutex<VecDeque<serde_json::Value>>> =
+        Arc::new(Mutex::new(VecDeque::with_capacity(60)));
+    let latest_hardware: Arc<Mutex<serde_json::Value>> =
+        Arc::new(Mutex::new(serde_json::json!({})));
+
     let state = AppState {
         active_model: active_model.clone(),
         engine_status: engine_status.clone(),
@@ -534,6 +555,8 @@ async fn main() {
             .timeout(std::time::Duration::from_secs(120))
             .build()
             .unwrap_or_default(),
+        hardware_history: hardware_history.clone(),
+        latest_hardware: latest_hardware.clone(),
     };
 
     log_event(&format!("HMIR API v2.0.0 STARTING (Port {})...", port));
@@ -693,7 +716,7 @@ async fn main() {
             let vram_gb = hw.vram_used_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
             let current_status = status_ref.lock().unwrap().clone();
 
-            let _ = tel_clone.emit(hmir_core::telemetry::TelemetryEvent::HardwareState {
+            let hw_event = hmir_core::telemetry::TelemetryEvent::HardwareState {
                 cpu_util: hw.cpu_util_pct,
                 gpu_util: hw.gpu_util_pct,
                 npu_util: hw.npu_util_pct,
@@ -723,8 +746,25 @@ async fn main() {
                 disk_model: hw.disk_model.clone(),
                 ram_speed_mts: hw.ram_speed_mts,
                 engine_status: current_status,
-            });
-            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+            };
+
+            // Store snapshot in history ring buffer for /v1/hardware/history
+            if let Ok(snapshot_json) = serde_json::to_value(&hw_event) {
+                // Update latest snapshot
+                if let Ok(mut latest) = latest_hardware.lock() {
+                    *latest = snapshot_json.clone();
+                }
+                // Push to history buffer
+                if let Ok(mut history) = hardware_history.lock() {
+                    if history.len() >= 60 {
+                        history.pop_front();
+                    }
+                    history.push_back(snapshot_json);
+                }
+            }
+
+            let _ = tel_clone.emit(hw_event);
+            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         }
     });
 
@@ -739,6 +779,8 @@ async fn main() {
         .route("/v1/telemetry", get(telemetry_stream))
         .route("/v1/logs", get(log_stream))
         .route("/v1/health", get(health_check))
+        .route("/v1/hardware/snapshot", get(get_hardware_snapshot))
+        .route("/v1/hardware/history", get(get_hardware_history))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

@@ -188,3 +188,139 @@ body {
 .download-info { display:flex; justify-content:space-between; font-size:12px; color:var(--text-dim); margin-bottom:6px; }
 .download-speed { color:var(--accent); font-weight:600; }
 .download-eta { color:var(--amber); }
+
+/* ===== MONITOR TAB (all-smi inspired) ===== */
+
+/* Spec header — nvidia-smi style */
+.spec-header {
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
+  margin-bottom:16px;
+}
+.spec-card {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px 20px;
+  backdrop-filter:blur(12px); transition:border-color 0.2s;
+}
+.spec-card:hover { border-color:var(--border-hover); }
+.spec-card-title {
+  display:flex; align-items:center; gap:8px;
+  font-size:11px; text-transform:uppercase; letter-spacing:1px;
+  color:var(--text-dim); margin-bottom:10px; font-weight:600;
+}
+.spec-card-title .spec-icon { font-size:14px; }
+.spec-table {
+  width:100%; font-family:var(--mono); font-size:12px; line-height:2;
+}
+.spec-table td:first-child {
+  color:var(--text-dim); padding-right:12px; white-space:nowrap; width:40%;
+}
+.spec-table td:last-child {
+  color:var(--text-bright); font-weight:500;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px;
+}
+
+/* Sparkline containers */
+.sparkline-row {
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
+  margin-bottom:16px;
+}
+.sparkline-card {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px;
+  backdrop-filter:blur(12px); transition:border-color 0.2s;
+  position:relative; overflow:hidden;
+}
+.sparkline-card:hover { border-color:var(--border-hover); }
+.sparkline-header {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:8px;
+}
+.sparkline-label {
+  font-size:11px; text-transform:uppercase; letter-spacing:1px;
+  color:var(--text-dim); font-weight:600;
+}
+.sparkline-value {
+  font-size:22px; font-weight:700; font-family:var(--mono);
+}
+.sparkline-value.cpu-color { color:#06b6d4; }
+.sparkline-value.gpu-color { color:#8b5cf6; }
+.sparkline-value.npu-color { color:#22c55e; }
+.sparkline-canvas {
+  width:100%; height:80px; border-radius:var(--radius-sm);
+  background:rgba(0,0,0,0.2);
+}
+
+/* Memory dashboard */
+.memory-dashboard {
+  display:grid; grid-template-columns:1fr 1fr; gap:16px;
+  margin-bottom:16px;
+}
+.mem-bar-group { margin-bottom:12px; }
+.mem-bar-label {
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:12px; margin-bottom:4px;
+}
+.mem-bar-label .mem-label-name { color:var(--text-dim); font-weight:500; }
+.mem-bar-label .mem-label-val { color:var(--text); font-family:var(--mono); font-size:11px; }
+.mem-bar-track {
+  width:100%; height:10px; background:rgba(255,255,255,0.04);
+  border-radius:5px; overflow:hidden; position:relative;
+}
+.mem-bar-fill {
+  height:100%; border-radius:5px; transition:width 0.6s ease;
+}
+.mem-bar-fill.ram { background:linear-gradient(90deg,#06b6d4,#0ea5e9); }
+.mem-bar-fill.vram-ded { background:linear-gradient(90deg,#8b5cf6,#a78bfa); }
+.mem-bar-fill.vram-shr { background:linear-gradient(90deg,#6366f1,#818cf8); }
+.mem-bar-fill.npu-mem { background:linear-gradient(90deg,#22c55e,#4ade80); }
+
+/* Power & thermal */
+.power-thermal-row {
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
+  margin-bottom:16px;
+}
+.thermal-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:3px 10px; border-radius:12px; font-size:12px;
+  font-weight:600; font-family:var(--mono);
+}
+.thermal-badge.cool { background:rgba(34,197,94,0.12); color:#22c55e; }
+.thermal-badge.warm { background:rgba(245,158,11,0.12); color:#f59e0b; }
+.thermal-badge.hot { background:rgba(239,68,68,0.12); color:#ef4444; }
+
+/* Section dividers */
+.section-divider {
+  height:1px; margin:4px 0 16px;
+  background:linear-gradient(90deg,transparent,var(--border),transparent);
+}
+.section-title {
+  font-size:11px; text-transform:uppercase; letter-spacing:1.5px;
+  color:var(--text-dim); font-weight:600; margin-bottom:12px;
+  display:flex; align-items:center; gap:8px;
+}
+.section-title::after {
+  content:''; flex:1; height:1px;
+  background:linear-gradient(90deg,var(--border),transparent);
+}
+
+/* Engine status card in monitor */
+.engine-monitor-card {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:16px;
+}
+.engine-stat {
+  text-align:center;
+}
+.engine-stat-label {
+  font-size:10px; text-transform:uppercase; letter-spacing:1px;
+  color:var(--text-dim); margin-bottom:4px;
+}
+.engine-stat-value {
+  font-size:18px; font-weight:700; font-family:var(--mono);
+}
+
+/* Responsive for monitor */
+@media(max-width:1024px) {
+  .spec-header,.sparkline-row,.power-thermal-row { grid-template-columns:1fr; }
+  .memory-dashboard { grid-template-columns:1fr; }
+  .engine-monitor-card { grid-template-columns:1fr 1fr; }
+}

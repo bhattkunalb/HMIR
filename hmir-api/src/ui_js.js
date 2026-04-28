@@ -8,7 +8,8 @@ const state = {
   activeTab: 'overview',
   streaming: false,
   workerOnline: false,
-  downloadProgress: {}
+  downloadProgress: {},
+  telemetryHistory: []  // Ring buffer for sparklines (max 60)
 };
 
 // --- SSE Connections ---
@@ -19,7 +20,9 @@ function connectTelemetry() {
       const d = JSON.parse(e.data);
       if (d.HardwareState) {
         state.telemetry = d.HardwareState;
+        pushTelemetryHistory(d.HardwareState);
         updateTelemetryUI();
+        if (state.activeTab === 'monitor') updateMonitorTab();
       } else if (d.DownloadStatus) {
         const prog = document.getElementById('dl-progress');
         if (prog) {
@@ -68,8 +71,8 @@ function updateTelemetryUI() {
   setText('cpu-name', t.cpu_name || 'N/A');
   setText('gpu-name', t.gpu_name || 'N/A');
   setText('npu-name', t.npu_name || 'N/A');
-  setText('cpu-temp', t.cpu_temp ? t.cpu_temp.toFixed(0) + '°C' : '--');
-  setText('gpu-temp', t.gpu_temp ? t.gpu_temp.toFixed(0) + '°C' : '--');
+  setText('cpu-temp', (t.cpu_temp !== undefined && t.cpu_temp !== null) ? t.cpu_temp.toFixed(0) + '°C' : '--');
+  setText('gpu-temp', (t.gpu_temp !== undefined && t.gpu_temp !== null) ? t.gpu_temp.toFixed(0) + '°C' : '--');
   setText('ram-info', (t.ram_used||0).toFixed(1) + ' / ' + (t.ram_total||0).toFixed(1) + ' GB');
   setText('vram-info', (t.vram_used||0).toFixed(1) + ' / ' + (t.vram_total||0).toFixed(1) + ' GB');
   setText('disk-info', (t.disk_free||0).toFixed(0) + ' / ' + (t.disk_total||0).toFixed(0) + ' GB free');
@@ -100,6 +103,219 @@ function setProgress(id, pct) {
 function formatUptime(s) {
   const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
   return `${h}h ${m}m ${sec}s`;
+}
+
+// --- Telemetry History ---
+function pushTelemetryHistory(t) {
+  state.telemetryHistory.push({
+    cpu: t.cpu_util || 0,
+    gpu: t.gpu_util || 0,
+    npu: t.npu_util || 0,
+    ts: Date.now()
+  });
+  if (state.telemetryHistory.length > 60) state.telemetryHistory.shift();
+}
+
+async function bootstrapHistory() {
+  try {
+    const r = await fetch(API + '/v1/hardware/history');
+    const arr = await r.json();
+    if (Array.isArray(arr)) {
+      arr.forEach(item => {
+        const hw = item.HardwareState || item;
+        pushTelemetryHistory(hw);
+      });
+    }
+  } catch {}
+}
+
+// --- Sparkline Drawing ---
+function drawSparkline(canvasId, dataKey, colorHex) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const data = state.telemetryHistory.map(p => p[dataKey]);
+  if (data.length < 2) {
+    // Draw flat line at 0
+    ctx.strokeStyle = colorHex + '40';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h - 4);
+    ctx.lineTo(w, h - 4);
+    ctx.stroke();
+    return;
+  }
+
+  const maxVal = Math.max(100, ...data);
+  const stepX = w / (60 - 1);
+  const offset = 60 - data.length;
+
+  // Build points
+  const points = data.map((v, i) => ({
+    x: (offset + i) * stepX,
+    y: h - 4 - ((v / maxVal) * (h - 8))
+  }));
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, colorHex + '30');
+  grad.addColorStop(1, colorHex + '02');
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, h);
+  ctx.lineTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const cpx = (prev.x + curr.x) / 2;
+    ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+  }
+  ctx.lineTo(points[points.length - 1].x, h);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Stroke line
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const cpx = (prev.x + curr.x) / 2;
+    ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+  }
+  ctx.strokeStyle = colorHex;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Current value dot
+  const last = points[points.length - 1];
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+  ctx.fillStyle = colorHex;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 6, 0, Math.PI * 2);
+  ctx.fillStyle = colorHex + '30';
+  ctx.fill();
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 4; i++) {
+    const gy = (h / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(0, gy);
+    ctx.lineTo(w, gy);
+    ctx.stroke();
+  }
+}
+
+// --- Monitor Tab Update ---
+function updateMonitorTab() {
+  const t = state.telemetry;
+  if (!t) return;
+
+  // Specs
+  setText('mon-cpu-model', t.cpu_name || 'N/A');
+  setText('mon-cpu-cores', t.cpu_cores || 'N/A');
+  setText('mon-cpu-threads', t.cpu_threads || 'N/A');
+  setText('mon-cpu-l3', t.cpu_l3_cache_mb ? t.cpu_l3_cache_mb.toFixed(1) + ' MB' : 'N/A');
+  setText('mon-cpu-temp', formatTemp(t.cpu_temp));
+  setText('mon-gpu-model', t.gpu_name || 'N/A');
+  setText('mon-gpu-driver', t.gpu_driver || 'N/A');
+  setText('mon-gpu-vram-ded', formatGB(t.gpu_vram_dedicated));
+  setText('mon-gpu-vram-shr', formatGB(t.gpu_vram_shared));
+  setText('mon-gpu-temp', formatTemp(t.gpu_temp));
+  setText('mon-npu-model', t.npu_name || 'None');
+  setText('mon-npu-driver', t.npu_driver || 'N/A');
+  setText('mon-npu-vram', formatGB(t.npu_vram_used));
+  setText('mon-npu-status', t.engine_status || 'N/A');
+  setText('mon-uptime', formatUptime(t.node_uptime || 0));
+
+  // Sparklines
+  setText('mon-spark-cpu-val', Math.round(t.cpu_util || 0) + '%');
+  setText('mon-spark-gpu-val', Math.round(t.gpu_util || 0) + '%');
+  setText('mon-spark-npu-val', Math.round(t.npu_util || 0) + '%');
+  drawSparkline('spark-cpu', 'cpu', '#06b6d4');
+  drawSparkline('spark-gpu', 'gpu', '#8b5cf6');
+  drawSparkline('spark-npu', 'npu', '#22c55e');
+
+  // Memory bars
+  const ramPct = t.ram_total > 0 ? (t.ram_used / t.ram_total * 100) : 0;
+  setText('mon-ram-val', (t.ram_used||0).toFixed(1) + ' / ' + (t.ram_total||0).toFixed(1) + ' GB');
+  setBarWidth('mon-ram-bar', ramPct);
+
+  const vramTotal = (t.gpu_vram_dedicated||0) + (t.gpu_vram_shared||0);
+  setText('mon-vram-ded-val', formatGB(t.gpu_vram_dedicated));
+  setBarWidth('mon-vram-ded-bar', vramTotal > 0 ? ((t.gpu_vram_dedicated||0) / vramTotal * 100) : 0);
+  setText('mon-vram-shr-val', formatGB(t.gpu_vram_shared));
+  setBarWidth('mon-vram-shr-bar', vramTotal > 0 ? ((t.gpu_vram_shared||0) / vramTotal * 100) : 0);
+  setText('mon-npu-mem-val', formatGB(t.npu_vram_used));
+  setBarWidth('mon-npu-mem-bar', t.npu_vram_used > 0 ? Math.min((t.npu_vram_used / 1.0) * 100, 100) : 0);
+
+  // Disk
+  setText('mon-disk-model', t.disk_model || 'Disk');
+  const diskUsed = (t.disk_total||0) - (t.disk_free||0);
+  const diskPct = t.disk_total > 0 ? (diskUsed / t.disk_total * 100) : 0;
+  setText('mon-disk-val', diskUsed.toFixed(0) + ' / ' + (t.disk_total||0).toFixed(0) + ' GB used');
+  setBarWidth('mon-disk-bar', diskPct);
+  setText('mon-ram-speed', t.ram_speed_mts ? t.ram_speed_mts + ' MT/s' : 'N/A');
+
+  // Thermal
+  updateThermalBadge('mon-cpu-temp-big', 'mon-cpu-thermal-badge', t.cpu_temp);
+  updateThermalBadge('mon-gpu-temp-big', 'mon-gpu-thermal-badge', t.gpu_temp);
+  setText('mon-power-val', t.power_w > 0 ? t.power_w.toFixed(1) + ' W' : 'N/A');
+
+  // Engine
+  setText('mon-engine-status', t.engine_status || 'N/A');
+  setText('mon-tps', (t.tps||0).toFixed(1));
+  setText('mon-kv', (t.kv_cache||0).toFixed(1) + ' MB');
+  setText('mon-node-uptime', formatUptime(t.node_uptime || 0));
+}
+
+function formatGB(val) {
+  if (!val || val === 0) return 'N/A';
+  if (val < 1) return (val * 1024).toFixed(0) + ' MB';
+  return val.toFixed(2) + ' GB';
+}
+function formatTemp(c) {
+  if (!c || c === 0) return '--';
+  return c.toFixed(0) + '°C';
+}
+function setBarWidth(id, pct) {
+  const el = document.getElementById(id);
+  if (el) el.style.width = Math.min(pct, 100) + '%';
+}
+function updateThermalBadge(tempId, badgeId, temp) {
+  const tempEl = document.getElementById(tempId);
+  const badgeEl = document.getElementById(badgeId);
+  if (!tempEl || !badgeEl) return;
+  if (!temp || temp === 0) {
+    tempEl.textContent = '--';
+    badgeEl.className = 'thermal-badge cool';
+    badgeEl.textContent = 'N/A';
+    return;
+  }
+  tempEl.textContent = temp.toFixed(0) + '°C';
+  if (temp >= 80) {
+    badgeEl.className = 'thermal-badge hot';
+    badgeEl.textContent = 'HOT';
+  } else if (temp >= 60) {
+    badgeEl.className = 'thermal-badge warm';
+    badgeEl.textContent = 'WARM';
+  } else {
+    badgeEl.className = 'thermal-badge cool';
+    badgeEl.textContent = 'COOL';
+  }
 }
 
 // --- Chat ---
@@ -285,6 +501,7 @@ function switchTab(tab) {
   if (tab === 'models') loadModels();
   if (tab === 'logs') renderLogs();
   if (tab === 'chat') renderChat();
+  if (tab === 'monitor') updateMonitorTab();
 }
 
 // --- Helpers ---
@@ -308,6 +525,7 @@ window.addEventListener('DOMContentLoaded', () => {
   renderChat();
   loadModels();
   checkHealth();
+  bootstrapHistory();
   setInterval(checkHealth, 15000);
   document.getElementById('chat-input')?.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }

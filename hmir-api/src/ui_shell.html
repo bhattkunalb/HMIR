@@ -26,6 +26,7 @@
 <!-- Tabs -->
 <div class="nav-tabs">
   <div class="nav-tab active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</div>
+  <div class="nav-tab" data-tab="monitor" onclick="switchTab('monitor')">📡 Monitor</div>
   <div class="nav-tab" data-tab="chat" onclick="switchTab('chat')">💬 Chat</div>
   <div class="nav-tab" data-tab="models" onclick="switchTab('models')">🧠 Models</div>
   <div class="nav-tab" data-tab="logs" onclick="switchTab('logs')">📋 Logs</div>
@@ -95,11 +96,160 @@
   <div class="card">
     <div class="card-title">Quick Actions</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="switchTab('monitor')">📡 Hardware Monitor</button>
       <button class="btn btn-primary" onclick="switchTab('chat')">💬 Open Chat</button>
       <button class="btn btn-primary" onclick="switchTab('models')">🧠 Manage Models</button>
       <button class="btn btn-ghost" onclick="switchTab('logs')">📋 View Logs</button>
       <button class="btn btn-ghost" onclick="switchTab('connect')">🔗 API Endpoints</button>
       <button class="btn btn-ghost" onclick="location.reload()">🔄 Refresh</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab: Monitor (all-smi inspired) -->
+<div class="main tab-content" id="tab-monitor" style="display:none">
+
+  <!-- Section: Hardware Specs -->
+  <div class="section-title">⚙️ Hardware Specifications</div>
+  <div class="spec-header">
+    <div class="spec-card">
+      <div class="spec-card-title"><span class="spec-icon">🔲</span> Processor</div>
+      <table class="spec-table">
+        <tr><td>Model</td><td id="mon-cpu-model">—</td></tr>
+        <tr><td>Cores</td><td id="mon-cpu-cores">—</td></tr>
+        <tr><td>Threads</td><td id="mon-cpu-threads">—</td></tr>
+        <tr><td>L3 Cache</td><td id="mon-cpu-l3">—</td></tr>
+        <tr><td>Temp</td><td id="mon-cpu-temp">—</td></tr>
+      </table>
+    </div>
+    <div class="spec-card">
+      <div class="spec-card-title"><span class="spec-icon">🎮</span> Graphics</div>
+      <table class="spec-table">
+        <tr><td>Model</td><td id="mon-gpu-model">—</td></tr>
+        <tr><td>Driver</td><td id="mon-gpu-driver">—</td></tr>
+        <tr><td>VRAM Ded.</td><td id="mon-gpu-vram-ded">—</td></tr>
+        <tr><td>VRAM Shared</td><td id="mon-gpu-vram-shr">—</td></tr>
+        <tr><td>Temp</td><td id="mon-gpu-temp">—</td></tr>
+      </table>
+    </div>
+    <div class="spec-card">
+      <div class="spec-card-title"><span class="spec-icon">🧠</span> Neural Processor</div>
+      <table class="spec-table">
+        <tr><td>Model</td><td id="mon-npu-model">—</td></tr>
+        <tr><td>Driver</td><td id="mon-npu-driver">—</td></tr>
+        <tr><td>VRAM Used</td><td id="mon-npu-vram">—</td></tr>
+        <tr><td>Status</td><td id="mon-npu-status">—</td></tr>
+        <tr><td>Uptime</td><td id="mon-uptime">—</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section: Real-Time Utilization -->
+  <div class="section-title">📈 Real-Time Utilization (60s)</div>
+  <div class="sparkline-row">
+    <div class="sparkline-card">
+      <div class="sparkline-header">
+        <span class="sparkline-label">CPU Usage</span>
+        <span class="sparkline-value cpu-color" id="mon-spark-cpu-val">0%</span>
+      </div>
+      <canvas class="sparkline-canvas" id="spark-cpu" width="400" height="80"></canvas>
+    </div>
+    <div class="sparkline-card">
+      <div class="sparkline-header">
+        <span class="sparkline-label">GPU Usage</span>
+        <span class="sparkline-value gpu-color" id="mon-spark-gpu-val">0%</span>
+      </div>
+      <canvas class="sparkline-canvas" id="spark-gpu" width="400" height="80"></canvas>
+    </div>
+    <div class="sparkline-card">
+      <div class="sparkline-header">
+        <span class="sparkline-label">NPU Usage</span>
+        <span class="sparkline-value npu-color" id="mon-spark-npu-val">0%</span>
+      </div>
+      <canvas class="sparkline-canvas" id="spark-npu" width="400" height="80"></canvas>
+    </div>
+  </div>
+
+  <!-- Section: Memory -->
+  <div class="section-title">💾 Memory & Storage</div>
+  <div class="memory-dashboard">
+    <div class="card">
+      <div class="card-title">System Memory</div>
+      <div class="mem-bar-group">
+        <div class="mem-bar-label"><span class="mem-label-name">RAM</span><span class="mem-label-val" id="mon-ram-val">—</span></div>
+        <div class="mem-bar-track"><div class="mem-bar-fill ram" id="mon-ram-bar" style="width:0%"></div></div>
+      </div>
+      <div class="mem-bar-group">
+        <div class="mem-bar-label"><span class="mem-label-name">GPU VRAM (Dedicated)</span><span class="mem-label-val" id="mon-vram-ded-val">—</span></div>
+        <div class="mem-bar-track"><div class="mem-bar-fill vram-ded" id="mon-vram-ded-bar" style="width:0%"></div></div>
+      </div>
+      <div class="mem-bar-group">
+        <div class="mem-bar-label"><span class="mem-label-name">GPU VRAM (Shared)</span><span class="mem-label-val" id="mon-vram-shr-val">—</span></div>
+        <div class="mem-bar-track"><div class="mem-bar-fill vram-shr" id="mon-vram-shr-bar" style="width:0%"></div></div>
+      </div>
+      <div class="mem-bar-group">
+        <div class="mem-bar-label"><span class="mem-label-name">NPU Memory</span><span class="mem-label-val" id="mon-npu-mem-val">—</span></div>
+        <div class="mem-bar-track"><div class="mem-bar-fill npu-mem" id="mon-npu-mem-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Storage</div>
+      <div class="mem-bar-group">
+        <div class="mem-bar-label"><span class="mem-label-name" id="mon-disk-model">Disk</span><span class="mem-label-val" id="mon-disk-val">—</span></div>
+        <div class="mem-bar-track"><div class="mem-bar-fill ram" id="mon-disk-bar" style="width:0%"></div></div>
+      </div>
+      <div style="margin-top:20px">
+        <div class="card-title">RAM Speed</div>
+        <div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--accent)" id="mon-ram-speed">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Power & Thermal -->
+  <div class="section-title">🌡️ Thermal & Power</div>
+  <div class="power-thermal-row">
+    <div class="card">
+      <div class="card-title">CPU Temperature</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:32px;font-weight:700;font-family:var(--mono)" id="mon-cpu-temp-big">—</div>
+        <span class="thermal-badge cool" id="mon-cpu-thermal-badge">COOL</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">GPU Temperature</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:32px;font-weight:700;font-family:var(--mono)" id="mon-gpu-temp-big">—</div>
+        <span class="thermal-badge cool" id="mon-gpu-thermal-badge">COOL</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Power Draw</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:32px;font-weight:700;font-family:var(--mono);color:var(--amber)" id="mon-power-val">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Engine -->
+  <div class="section-title">⚡ Inference Engine</div>
+  <div class="card">
+    <div class="engine-monitor-card">
+      <div class="engine-stat">
+        <div class="engine-stat-label">Status</div>
+        <div class="engine-stat-value" style="color:var(--green)" id="mon-engine-status">—</div>
+      </div>
+      <div class="engine-stat">
+        <div class="engine-stat-label">Tokens/sec</div>
+        <div class="engine-stat-value" style="color:var(--accent)" id="mon-tps">0.0</div>
+      </div>
+      <div class="engine-stat">
+        <div class="engine-stat-label">KV Cache</div>
+        <div class="engine-stat-value" id="mon-kv">0 MB</div>
+      </div>
+      <div class="engine-stat">
+        <div class="engine-stat-label">Node Uptime</div>
+        <div class="engine-stat-value" style="color:var(--text-dim)" id="mon-node-uptime">—</div>
+      </div>
     </div>
   </div>
 </div>

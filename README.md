@@ -30,13 +30,16 @@ Full production architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## One-Command Install
 
-### Windows
+### Windows (Recommended)
+
+> [!TIP]
+> Run PowerShell as **Administrator** for optimal NPU driver access and system path integration.
 
 ```powershell
 irm https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.ps1 | iex
 ```
 
-### Linux / macOS
+### Linux / macOS (Beta)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.sh | bash

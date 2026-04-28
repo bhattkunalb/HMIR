@@ -54,6 +54,10 @@
     "Uvicorn",
     "vram",
     "webbrowser",
+    "sparkline",
+    "sparklines",
+    "Bezier",
+    "MTS",
     "winget"
   ],
   "ignorePaths": [
