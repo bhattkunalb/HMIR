@@ -79,7 +79,7 @@ async fn download_snapshot(repo_id: &str, folder_name: &str) -> Result<(), Strin
         repo_id, folder_name
     );
 
-    let status = Command::new(&python)
+    let status = Command::new(python)
         .arg(script_path)
         .arg(repo_id)
         .arg(folder_name)

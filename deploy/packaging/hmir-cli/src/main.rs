@@ -169,7 +169,7 @@ async fn main() {
 
             if hmir_dir.exists() {
                 // Try standard removal first
-                if let Err(_) = std::fs::remove_dir_all(&hmir_dir) {
+                if std::fs::remove_dir_all(&hmir_dir).is_err() {
                     // If failed (locks), try the rename-to-delete strategy for sub-binaries
                     println!("  ⚠️  Standard purge blocked. Attempting deep purge...");
                     
@@ -248,10 +248,10 @@ fn purge_directory_robust(path: &std::path::Path) -> std::io::Result<()> {
         let _ = std::fs::remove_dir(path);
     } else {
         // Attempt direct delete
-        if let Err(_) = std::fs::remove_file(path) {
+        if std::fs::remove_file(path).is_err() {
             // Rename locked file to .old and try again or just leave it for next reboot
             let old_path = path.with_extension(format!("{}.old", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
-            if let Ok(_) = std::fs::rename(path, &old_path) {
+            if std::fs::rename(path, &old_path).is_ok() {
                 let _ = std::fs::remove_file(old_path);
             }
         }

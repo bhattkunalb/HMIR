@@ -609,6 +609,7 @@ impl DashboardApp {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_model_card(
         &self,
         ui: &mut egui::Ui,
@@ -1363,49 +1364,41 @@ fn main() -> Result<(), eframe::Error> {
 
             tokio::spawn(async move {
                 loop {
-                    match client_for_telemetry
+                    if let Ok(response) = client_for_telemetry
                         .get(format!("{}/v1/telemetry", *api_for_telemetry))
                         .send()
-                        .await
-                    {
-                        Ok(response) => {
-                            let mut stream = response.bytes_stream();
-                            while let Some(item) = stream.next().await {
-                                match item {
-                                    Ok(bytes) => {
-                                        let chunk = String::from_utf8_lossy(&bytes);
-                                        for line in chunk.lines() {
-                                            if let Some(payload) = line.strip_prefix("data:") {
-                                                if let Ok(event) =
-                                                    serde_json::from_str::<TelemetryEvent>(payload.trim())
-                                                {
-                                                    let _ = tx_for_telemetry.send(event);
-                                                }
+                        .await {
+                        let mut stream = response.bytes_stream();
+                        while let Some(item) = stream.next().await {
+                            match item {
+                                Ok(bytes) => {
+                                    let chunk = String::from_utf8_lossy(&bytes);
+                                    for line in chunk.lines() {
+                                        if let Some(payload) = line.strip_prefix("data:") {
+                                            if let Ok(event) =
+                                                serde_json::from_str::<TelemetryEvent>(payload.trim())
+                                            {
+                                                let _ = tx_for_telemetry.send(event);
                                             }
                                         }
                                     }
-                                    Err(_) => break,
                                 }
+                                Err(_) => break,
                             }
                         }
-                        Err(_) => {}
                     }
                     tokio::time::sleep(Duration::from_secs(2)).await;
                 }
             });
 
             loop {
-                match client_for_models
+                if let Ok(response) = client_for_models
                     .get(format!("{}/v1/models/installed", *api_for_models))
                     .send()
-                    .await
-                {
-                    Ok(response) => if let Ok(models) = response.json::<Vec<String>>().await {
-                        let mut guard = models_shared_ref.lock().unwrap();
-                        *guard = models;
-                    },
-                    Err(_) => {}
-                }
+                    .await { if let Ok(models) = response.json::<Vec<String>>().await {
+                    let mut guard = models_shared_ref.lock().unwrap();
+                    *guard = models;
+                } }
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         });

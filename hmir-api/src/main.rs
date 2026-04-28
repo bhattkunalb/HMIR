@@ -91,9 +91,9 @@ fn resolve_python_command() -> String {
     let cwd = std::env::current_dir().unwrap_or_default();
     let exe_dir = std::env::current_exe()
         .ok()
-        .and_then(|mut path| {
+        .map(|mut path| {
             path.pop();
-            Some(path)
+            path
         })
         .unwrap_or_else(|| PathBuf::from("."));
 
@@ -451,7 +451,7 @@ async fn chat_completions(
                                 let data = line.strip_prefix("data: ").unwrap_or("").trim();
                                 if !data.is_empty() {
                                     // Safety: Remove any actual newlines that would cause axum to panic
-                                    let sanitized_data = data.replace('\n', " ").replace('\r', " ");
+                                    let sanitized_data = data.replace(['\n', '\r'], " ");
                                     token_count += 1;
                                     let _ = tx.send(Ok(Event::default().data(sanitized_data))).await;
                                 }

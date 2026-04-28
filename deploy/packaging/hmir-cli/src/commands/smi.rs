@@ -22,7 +22,7 @@ pub async fn run_smi(port: u16) {
         }
         Err(_) => {
             println!("{} HMIR Node is offline.", "❌".red());
-            println!("💡 Start it with: {} {}", "hmir".bold(), "start");
+            println!("💡 Start it with: {} start", "hmir".bold());
         }
     }
 }
@@ -77,6 +77,35 @@ fn render_table(data: &Value) {
     ]);
 
     println!("{table}");
+    
+    // Process Table (all-smi style)
+    if let Some(processes) = data["processes"].as_array() {
+        if !processes.is_empty() {
+            println!("\n{}", "󰚩 Process Activity (all-smi style):".bold().cyan());
+            let mut proc_table = Table::new();
+            proc_table
+                .load_preset(UTF8_FULL)
+                .apply_modifier(UTF8_ROUND_CORNERS)
+                .set_header(vec![
+                    Cell::new("PID").add_attribute(Attribute::Bold).fg(TableColor::Cyan),
+                    Cell::new("Process").add_attribute(Attribute::Bold).fg(TableColor::Cyan),
+                    Cell::new("Status").add_attribute(Attribute::Bold).fg(TableColor::Cyan),
+                    Cell::new("Compute").add_attribute(Attribute::Bold).fg(TableColor::Cyan),
+                    Cell::new("Memory").add_attribute(Attribute::Bold).fg(TableColor::Cyan),
+                ]);
+
+            for proc in processes {
+                proc_table.add_row(vec![
+                    Cell::new(proc["pid"].as_u64().unwrap_or(0).to_string()),
+                    Cell::new(proc["name"].as_str().unwrap_or("Unknown")),
+                    Cell::new(proc["status"].as_str().unwrap_or("Running")).fg(TableColor::Green),
+                    Cell::new(proc["compute_type"].as_str().unwrap_or("CPU")),
+                    Cell::new(format!("{:.0} MB", proc["memory_usage_bytes"].as_f64().unwrap_or(0.0) / 1024.0 / 1024.0)),
+                ]);
+            }
+            println!("{proc_table}");
+        }
+    }
 
     // Additional Stats
     println!("\n{}", "System Context:".bold().white());

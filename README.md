@@ -147,7 +147,7 @@ hmir smi
 ```
 
 - `status`: High-level health and active model info.
-- `smi`: Detailed per-device utilization (NPU/GPU/CPU).
+- `smi`: Detailed per-device utilization (NPU/GPU/CPU) and live process activity.
 
 This opens the high-fidelity **System Management Interface** to monitor your silicon in real-time.
 

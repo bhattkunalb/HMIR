@@ -48,28 +48,25 @@ pub async fn run_status(port: u16) {
     }
 
     // 3. Hardware Snapshot
-    match client.get(format!("{}/hardware/snapshot", url)).send().await {
-        Ok(resp) => {
-            if let Ok(json) = resp.json::<Value>().await {
-                println!("\n   🖥️  Hardware Profile:");
-                if let Some(cpu) = json.get("cpu_name").and_then(|v| v.as_str()) {
-                    println!("      CPU: {}", cpu);
-                }
-                if let Some(gpu) = json.get("gpu_name").and_then(|v| v.as_str()) {
-                    println!("      GPU: {}", gpu);
-                }
-                if let Some(npu) = json.get("npu_name").and_then(|v| v.as_str()) {
-                    println!("      NPU: {}", npu);
-                }
-                
-                let ram_used = json.get("ram_used").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let ram_total = json.get("ram_total").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                if ram_total > 0.0 {
-                    println!("      RAM: {:.1} GB / {:.1} GB ({:.1}%)", ram_used, ram_total, (ram_used / ram_total) * 100.0);
-                }
+    if let Ok(resp) = client.get(format!("{}/hardware/snapshot", url)).send().await {
+        if let Ok(json) = resp.json::<Value>().await {
+            println!("\n   🖥️  Hardware Profile:");
+            if let Some(cpu) = json.get("cpu_name").and_then(|v| v.as_str()) {
+                println!("      CPU: {}", cpu);
+            }
+            if let Some(gpu) = json.get("gpu_name").and_then(|v| v.as_str()) {
+                println!("      GPU: {}", gpu);
+            }
+            if let Some(npu) = json.get("npu_name").and_then(|v| v.as_str()) {
+                println!("      NPU: {}", npu);
+            }
+            
+            let ram_used = json.get("ram_used").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let ram_total = json.get("ram_total").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            if ram_total > 0.0 {
+                println!("      RAM: {:.1} GB / {:.1} GB ({:.1}%)", ram_used, ram_total, (ram_used / ram_total) * 100.0);
             }
         }
-        Err(_) => {}
     }
     
     println!("\n✨ HMIR ELITE is healthy and ready for inference.");
