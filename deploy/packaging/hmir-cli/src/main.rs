@@ -57,7 +57,14 @@ enum Commands {
     Stop,
     /// Launch the native dashboard directly
     #[command(visible_alias = "ui")]
+    #[command(visible_alias = "dashboard")]
     Dashboard {
+        /// The port to connect to the API on
+        #[arg(short, long)]
+        port: Option<u16>,
+    },
+    /// Launch the legacy web console in the browser
+    Web {
         /// The port to connect to the API on
         #[arg(short, long)]
         port: Option<u16>,
@@ -137,6 +144,15 @@ async fn main() {
             let config = hmir_core::config::HmirConfig::load();
             let final_port = port.unwrap_or(config.api_port);
             commands::start::launch_dashboard(final_port).await;
+        }
+        Commands::Web { port } => {
+            let config = hmir_core::config::HmirConfig::load();
+            let final_port = port.unwrap_or(config.api_port);
+            let url = format!("http://127.0.0.1:{}", final_port);
+            println!("🌐 Opening Web Console: {}", url);
+            if let Err(e) = webbrowser::open(&url) {
+                println!("⚠️  Unable to open browser: {}", e);
+            }
         }
         Commands::Integrations { port, model } => {
             let config = hmir_core::config::HmirConfig::load();

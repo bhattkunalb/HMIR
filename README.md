@@ -142,6 +142,8 @@ After installation, use the `hmir` command to manage your runtime.
 | `hmir suggest` | **Start here.** Detects hardware and recommends models. |
 | `hmir pull <name>` | Downloads an optimized model (e.g., `qwen2.5-1.5b-ov`). |
 | `hmir start` | Launches the API and the **Native Dashboard**. |
+| `hmir dashboard` | Launches the native dashboard UI only. |
+| `hmir web` | Opens the legacy browser-based console. |
 | `hmir status` | Checks health, active models, and port status. |
 | `hmir smi` | Real-time **System Management Interface** (NPU/GPU/CPU). |
 | `hmir stop` | Gracefully stops all background workers and APIs. |
@@ -186,7 +188,7 @@ The desktop dashboard is the main local control plane:
 - advanced log viewing is built in
 
 ```bash
-hmir start --dashboard
+hmir dashboard
 ```
 
 ## Integrations
