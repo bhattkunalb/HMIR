@@ -1,5 +1,7 @@
 # HMIR Architecture Blueprint
 
+<!-- cSpell:ignore EWMA ewma multimodal fastflowlm llamacpp downloaders -->
+
 HMIR is a local LLM runtime for heterogeneous machines. The design target is simple to describe and hard to fake:
 
 - Detect `NPU`, `GPU`, and `CPU` automatically.
