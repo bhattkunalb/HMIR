@@ -9,7 +9,7 @@ use axum::{
 };
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::convert::Infallible;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -152,7 +152,7 @@ pub async fn list_installed_models(State(state): State<AppState>) -> Json<serde_
     // Paths to search for models
     let mut search_paths = vec![models_dir()];
     // Add ~/.hmir/model (singular) as well
-    let mut model_singular = hmir_data_dir();
+    let mut model_singular = data_root();
     model_singular.push("model");
     search_paths.push(model_singular);
 
@@ -331,7 +331,7 @@ pub async fn download_model(
         let script_path = resolve_script_path("download_npu_model.py");
         let python_bin = resolve_python_command();
 
-        let mut child_res = tokio::process::Command::new(python_bin)
+        let child_res = tokio::process::Command::new(python_bin)
             .arg(script_path)
             .arg(&repo)
             .arg(&folder)
