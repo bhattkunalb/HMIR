@@ -177,9 +177,12 @@ pub async fn list_installed_models(State(state): State<AppState>) -> Json<serde_
     model_singular.push("model");
     search_paths.push(model_singular);
 
+    // Only scan explicit model directories, avoiding system-wide leakage if run from System32
     if let Ok(cwd) = std::env::current_dir() {
-        search_paths.push(cwd.join("model")); 
-        search_paths.push(cwd.clone());       
+        let local_models = cwd.join("models");
+        if local_models.exists() {
+            search_paths.push(local_models);
+        }
     }
 
     // Helper to find models in a directory (max depth 2)
@@ -213,7 +216,7 @@ pub async fn list_installed_models(State(state): State<AppState>) -> Json<serde_
                     }
                 } else if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
                     let ext_l = ext.to_lowercase();
-                    if ext_l == "gguf" || ext_l == "ov" || ext_l == "bin" {
+                    if ext_l == "gguf" || ext_l == "ov" {
                         if !seen.contains(&n) {
                             seen.insert(n.clone());
                             let size = (entry.metadata().map(|m| m.len()).unwrap_or(0) as f64) / 1_073_741_824.0;
