@@ -331,51 +331,61 @@ pub async fn download_model(
         let script_path = resolve_script_path("download_npu_model.py");
         let python_bin = resolve_python_command();
 
-        let mut child = tokio::process::Command::new(python_bin)
+        let mut child_res = tokio::process::Command::new(python_bin)
             .arg(script_path)
             .arg(&repo)
             .arg(&folder)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
-            .expect("Failed to spawn downloader");
+            .spawn();
+        match child_res {
+            Ok(mut child) => {
+                let stdout = child.stdout.take();
+                let stderr = child.stderr.take();
 
-        let stdout = child.stdout.take().unwrap();
-        let stderr = child.stderr.take().unwrap();
-
-        let mut stdout_reader = BufReader::new(stdout).lines();
-        let mut stderr_reader = BufReader::new(stderr).lines();
-
-        loop {
-            tokio::select! {
-                line = stdout_reader.next_line() => {
-                    if let Ok(Some(l)) = line {
-                        log_event(&format!("[DL-STDOUT] {}", l));
-                    } else { break; }
+                if stdout.is_none() || stderr.is_none() {
+                    log_event("❌ [ERROR] Failed to establish IO pipes for downloader");
+                    return;
                 }
-                line = stderr_reader.next_line() => {
-                    if let Ok(Some(l)) = line {
-                        log_event(&format!("[DL-STDERR] {}", l));
+
+                let mut stdout_reader = BufReader::new(stdout.unwrap()).lines();
+                let mut stderr_reader = BufReader::new(stderr.unwrap()).lines();
+
+                loop {
+                    tokio::select! {
+                        line = stdout_reader.next_line() => {
+                            if let Ok(Some(l)) = line {
+                                log_event(&format!("[DL-STDOUT] {}", l));
+                            } else { break; }
+                        }
+                        line = stderr_reader.next_line() => {
+                            if let Ok(Some(l)) = line {
+                                log_event(&format!("[DL-STDERR] {}", l));
+                            }
+                        }
+                    }
+                }
+
+                let status = child.wait().await;
+                match status {
+                    Ok(s) if s.success() => {
+                        let _ = tel_clone.emit(hmir_core::telemetry::TelemetryEvent::DownloadStatus {
+                            model: repo,
+                            status: "Completed".to_string(),
+                            progress: 100.0,
+                        });
+                    }
+                    _ => {
+                        let _ = tel_clone.emit(hmir_core::telemetry::TelemetryEvent::DownloadStatus {
+                            model: repo,
+                            status: "Failed".to_string(),
+                            progress: 0.0,
+                        });
                     }
                 }
             }
-        }
-
-        let status = child.wait().await;
-        match status {
-            Ok(s) if s.success() => {
-                let _ = tel_clone.emit(hmir_core::telemetry::TelemetryEvent::DownloadStatus {
-                    model: repo,
-                    status: "Completed".to_string(),
-                    progress: 100.0,
-                });
-            }
-            _ => {
-                let _ = tel_clone.emit(hmir_core::telemetry::TelemetryEvent::DownloadStatus {
-                    model: repo,
-                    status: "Failed".to_string(),
-                    progress: 0.0,
-                });
+            Err(e) => {
+                log_event(&format!("❌ [ERROR] Failed to spawn downloader: {}", e));
             }
         }
     });
@@ -679,21 +689,21 @@ async fn main() {
                 let child_stdout = child.stdout.take();
                 tokio::spawn(async move {
                     if let Some(stdout) = child_stdout {
-                        let mut reader =
-                            BufReader::new(tokio::process::ChildStdout::from_std(stdout).unwrap())
-                                .lines();
-                        while let Ok(Some(line)) = reader.next_line().await {
-                            log_event(&format!("[NPU-OUT] {}", line));
+                        if let Ok(std_stdout) = tokio::process::ChildStdout::from_std(stdout) {
+                            let mut reader = BufReader::new(std_stdout).lines();
+                            while let Ok(Some(line)) = reader.next_line().await {
+                                log_event(&format!("[NPU-OUT] {}", line));
+                            }
                         }
                     }
                 });
                 tokio::spawn(async move {
                     if let Some(stderr) = child_stderr {
-                        let mut reader =
-                            BufReader::new(tokio::process::ChildStderr::from_std(stderr).unwrap())
-                                .lines();
-                        while let Ok(Some(line)) = reader.next_line().await {
-                            log_event(&format!("[NPU-ERR] {}", line));
+                        if let Ok(std_stderr) = tokio::process::ChildStderr::from_std(stderr) {
+                            let mut reader = BufReader::new(std_stderr).lines();
+                            while let Ok(Some(line)) = reader.next_line().await {
+                                log_event(&format!("[NPU-ERR] {}", line));
+                            }
                         }
                     }
                 });
