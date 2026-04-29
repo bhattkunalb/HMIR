@@ -17,6 +17,7 @@ Local LLM deployment is often a trade-off between performance and efficiency. HM
 - **🔌 OpenAI Compatible**: A drop-in replacement for any application using the OpenAI SDK. Use your favorite tools (Cursor, Open WebUI, etc.) with local silicon.
 - **📊 Unified Telemetry**: Real-time visibility into NPU, GPU, and CPU utilization through the `hmir smi` tool and native dashboards.
 - **⚡ Self-Healing Runtime**: Automatic recovery from port conflicts, stale hardware caches, and corrupt model weights.
+- **🤫 Silent Background Mode**: Optimized for Windows with zero-window execution (no PowerShell flickers) for all background workers.
 
 ---
 
@@ -83,6 +84,7 @@ HMIR is designed for **Zero-Touch Maintenance**. It includes several self-healin
 
 - **Automatic Cache Recovery**: If a model load fails due to a corrupt OpenVINO cache, HMIR automatically purges the stale cache and retries, preventing "stuck" engine states.
 - **Port Conflict 'Attach'**: If you try to `hmir start` when a node is already running, the CLI gracefully attaches to the existing instance instead of failing.
+- **Ghost Process Termination**: `hmir start` now automatically cleans up stale processes on ports 8080 and 8089 to ensure a fresh, stable startup.
 - **System Purge**: Use `hmir clean` to manually reset all hardware acceleration caches if you experience instability after a driver update.
 
 ## 📦 Installation
@@ -144,10 +146,12 @@ hmir start --headless --model qwen2.5-1.5b-ov
 ```bash
 hmir status
 hmir smi
+hmir stop
 ```
 
 - `status`: High-level health and active model info.
 - `smi`: Detailed per-device utilization (NPU/GPU/CPU) and live process activity.
+- `stop`: Gracefully terminates all background inference nodes and worker services.
 
 This opens the high-fidelity **System Management Interface** to monitor your silicon in real-time.
 
@@ -288,6 +292,22 @@ hmir clean
 
 - **Intel NPU**: Requires driver version `31.0.100.xxxx` or higher.
 - **NVIDIA**: Requires CUDA `12.x` for optimal GGUF acceleration.
+
+### 4. Background Window Flickering
+
+HMIR Elite uses the `CREATE_NO_WINDOW` flag for all background PowerShell and Python processes. If you still see windows opening/closing, ensure you are running the latest version:
+
+```bash
+irm https://raw.githubusercontent.com/bhattkunalb/HMIR/main/scripts/install.ps1 | iex
+```
+
+### 5. Cleaning System File "Noise"
+
+If you see system files (like `.bin` firmware) in your model list, HMIR has been updated to ignore them. It now only scans:
+
+- `C:\Users\<User>\.hmir\models`
+- `AppData\Local\hmir\models`
+- Explicit `.gguf` files.
 
 ---
 

@@ -551,6 +551,35 @@ scripts/
 - add battery/power-aware routing
 - add formal benchmarking harness
 
+## Production Runtime Hardening
+
+As of v0.1.5, HMIR includes several "production-stable" hardening features focused on Windows environment stability:
+
+### 1. Windowless Execution
+
+All background processes (NPU workers, telemetry probers, downloaders) are spawned using the `CREATE_NO_WINDOW` (`0x08000000`) flag. This ensures that the user experience is free from terminal window flickering during periodic health checks or background inference.
+
+### 2. Service Orchestration
+
+The HMIR node acts as a watchdog for its backend worker processes.
+
+- **Port Management**: The system automatically scans and terminates stale processes on ports `8080` (API) and `8089` (NPU Bridge) before a new session begins.
+- **Working Directory Isolation**: Background workers are forced to run within the application root directory rather than inheriting `System32` or the user's current shell directory.
+
+### 3. Model Discovery Filter
+
+To prevent scanning gigabytes of system firmware or driver binaries, the model discovery layer is restricted to:
+
+- Explicit model directories (e.g., `AppData/Local/hmir/models`).
+- Recognized file formats (`.gguf`).
+- Explicitly defined OpenVINO IR folders.
+
+---
+
+## Contributing
+
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), then read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the target system design and scheduler direction.
+
 ## Implementation Guidance
 
 If you want the shortest path to a strong open-source v1:
