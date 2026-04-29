@@ -54,8 +54,8 @@ pub async fn start_daemon(port: u16, web: bool, model: Option<String>, no_browse
 
         #[cfg(windows)]
         {
-            // Windows detached process flag: 0x00000008
-            api_cmd.creation_flags(0x00000008);
+            // DETACHED_PROCESS (0x00000008) + CREATE_NO_WINDOW (0x08000000)
+            api_cmd.creation_flags(0x08000008);
         }
 
         match api_cmd.spawn() {

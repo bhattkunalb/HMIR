@@ -199,20 +199,33 @@ fn stop_all_instances() {
     println!("🛑 HMIR ELITE | TERMINATING ALL COMPUTE INSTANCES");
     if cfg!(target_os = "windows") {
         println!("  [1/3] Closing Inference API...");
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
         let _ = std::process::Command::new("taskkill")
             .args(["/F", "/IM", "hmir-api.exe", "/T"])
+            .creation_flags(CREATE_NO_WINDOW)
             .output();
 
         println!("  [2/3] Closing Hardware Dashboard...");
         let _ = std::process::Command::new("taskkill")
             .args(["/F", "/IM", "hmir-dashboard.exe", "/T"])
+            .creation_flags(0x08000000)
             .output();
 
         println!("  [3/3] Deactivating NPU Bridges...");
         // Surgical kill using PowerShell to avoid killing unrelated python processes
-        let _ = std::process::Command::new("powershell")
-            .args(["-Command", "Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*hmir_npu_service.py*' } | Stop-Process -Force"])
-            .output();
+        if cfg!(target_os = "windows") {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            let _ = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", "Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*hmir_npu_service.py*' } | Stop-Process -Force"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+        } else {
+            let _ = std::process::Command::new("pkill")
+                .args(["-f", "hmir_npu_service.py"])
+                .output();
+        }
         
         // Give the OS time to release file handles
         std::thread::sleep(std::time::Duration::from_millis(1000));

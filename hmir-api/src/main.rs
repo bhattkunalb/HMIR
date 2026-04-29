@@ -151,61 +151,68 @@ pub async fn list_installed_models(State(state): State<AppState>) -> Json<serde_
 
     // Paths to search for models
     let mut search_paths = vec![models_dir()];
+    // Add ~/.hmir/model (singular) as well
+    let mut model_singular = hmir_data_dir();
+    model_singular.push("model");
+    search_paths.push(model_singular);
+
     if let Ok(cwd) = std::env::current_dir() {
-        search_paths.push(cwd.join("model")); // Project root 'model' dir
-        search_paths.push(cwd.clone());       // Current dir for loose models
+        search_paths.push(cwd.join("model")); 
+        search_paths.push(cwd.clone());       
     }
 
-    for path in search_paths {
-        if let Ok(entries) = std::fs::read_dir(&path) {
+    // Helper to find models in a directory (max depth 2)
+    fn find_models_in_dir(path: &PathBuf, depth: usize, seen: &mut HashSet<String>, active_now: &str) -> Vec<serde_json::Value> {
+        let mut found = Vec::new();
+        if depth > 2 { return found; }
+
+        if let Ok(entries) = std::fs::read_dir(path) {
             for entry in entries.flatten() {
-                let mut name = None;
-                let mut is_dir = false;
                 let entry_path = entry.path();
-                
+                let n = entry.file_name().to_string_lossy().to_string();
+
                 if entry_path.is_dir() {
-                    name = entry.file_name().to_str().map(|s| s.to_string());
-                    is_dir = true;
+                    let is_valid = entry_path.join("config.json").exists() 
+                                || entry_path.join("openvino_model.xml").exists()
+                                || n.to_lowercase().contains("-ov")
+                                || n.to_lowercase().contains("-gguf");
+
+                    if is_valid {
+                        if !seen.contains(&n) {
+                            seen.insert(n.clone());
+                            found.push(serde_json::json!({
+                                "name": n.clone(),
+                                "active": n == active_now,
+                                "size": "Folder",
+                                "path": entry_path.to_string_lossy()
+                            }));
+                        }
+                    } else {
+                        found.extend(find_models_in_dir(&entry_path, depth + 1, seen, active_now));
+                    }
                 } else if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
                     let ext_l = ext.to_lowercase();
                     if ext_l == "gguf" || ext_l == "ov" || ext_l == "bin" {
-                        name = entry.file_name().to_str().map(|s| s.to_string());
+                        if !seen.contains(&n) {
+                            seen.insert(n.clone());
+                            let size = (entry.metadata().map(|m| m.len()).unwrap_or(0) as f64) / 1_073_741_824.0;
+                            found.push(serde_json::json!({
+                                "name": n.clone(),
+                                "active": n == active_now,
+                                "size": format!("{:.1} GB", size),
+                                "path": entry_path.to_string_lossy()
+                            }));
+                        }
                     }
-                }
-
-                if let Some(n) = name {
-                    // Filter: Only include valid model directories or specific files
-                    // For directories, check if they look like a model (contain config.json or openvino_model.xml)
-                    if is_dir {
-                        let is_valid = entry_path.join("config.json").exists() 
-                                    || entry_path.join("openvino_model.xml").exists()
-                                    || n.to_lowercase().contains("-ov")
-                                    || n.to_lowercase().contains("-gguf");
-                        if !is_valid { continue; }
-                    }
-
-                    if seen.contains(&n) { continue; }
-                    seen.insert(n.clone());
-
-                    let is_active = n == active_now;
-                    let size_str = if is_dir {
-                        "Folder".to_string()
-                    } else {
-                        format!(
-                            "{:.1} GB",
-                            (entry.metadata().map(|m| m.len()).unwrap_or(0) as f64) / 1_073_741_824.0
-                        )
-                    };
-
-                    models.push(serde_json::json!({
-                        "name": n,
-                        "active": is_active,
-                        "size": size_str,
-                        "path": entry_path.to_string_lossy()
-                    }));
                 }
             }
         }
+        found
+    }
+
+    use std::collections::HashSet;
+    for path in search_paths {
+        models.extend(find_models_in_dir(&path, 1, &mut seen, &active_now));
     }
     Json(serde_json::json!({ "models": models }))
 }
@@ -611,9 +618,13 @@ async fn main() {
     
     // Cleanup port 8089 before starting to avoid 10048 errors
     if cfg!(target_os = "windows") {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         log_event("  [BOOT] Cleaning up port 8089...");
         let _ = std::process::Command::new("powershell")
-            .args(["-Command", &format!("Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}", config.worker_port)])
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &format!("Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}", config.worker_port)])
+            .creation_flags(CREATE_NO_WINDOW)
             .output();
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
@@ -645,6 +656,9 @@ async fn main() {
         log_event(&format!("  Worker script: {}", worker_script.display()));
         log_event(&format!("  Working directory: {}", project_root.display()));
 
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         match std::process::Command::new(&python_bin)
             .arg("-u")
             .arg(&worker_script)
@@ -654,6 +668,7 @@ async fn main() {
             .env("HMIR_MODEL_PATH", &model_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn()
         {
             Ok(mut child) => {
@@ -738,22 +753,32 @@ async fn main() {
                                 
                                 // 1. Kill any existing process on the port
                                 if cfg!(target_os = "windows") {
+                                    use std::os::windows::process::CommandExt;
+                                    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
                                     let _ = std::process::Command::new("powershell")
-                                        .args(["-Command", &format!("Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}", worker_port_watch)])
+                                        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &format!("Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}", worker_port_watch)])
+                                        .creation_flags(CREATE_NO_WINDOW)
                                         .output();
                                 }
 
                                 // 2. Restart
-                                let _ = std::process::Command::new(&python_bin_watch)
-                                    .arg("-u")
-                                    .arg(&worker_script_watch)
-                                    .arg("--port")
-                                    .arg(worker_port_watch.to_string())
-                                    .current_dir(&project_root_watch)
-                                    .env("HMIR_MODEL_PATH", &model_path_watch)
-                                    .stdout(Stdio::inherit())
-                                    .stderr(Stdio::inherit())
-                                    .spawn();
+                                {
+                                    use std::os::windows::process::CommandExt;
+                                    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+                                    let _ = std::process::Command::new(&python_bin_watch)
+                                        .arg("-u")
+                                        .arg(&worker_script_watch)
+                                        .arg("--port")
+                                        .arg(worker_port_watch.to_string())
+                                        .current_dir(&project_root_watch)
+                                        .env("HMIR_MODEL_PATH", &model_path_watch)
+                                        .stdout(Stdio::inherit())
+                                        .stderr(Stdio::inherit())
+                                        .creation_flags(CREATE_NO_WINDOW)
+                                        .spawn();
+                                }
                                 
                                 tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
                             }
