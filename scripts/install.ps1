@@ -17,7 +17,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 # Configuration & Constants
 # ========================================
 $REPO = "bhattkunalb/HMIR"
-$BUILD_TIMESTAMP = "2026-04-28-17:15" # Cache buster
+$BUILD_TIMESTAMP = "2026-04-29-17:22" # Cache buster
 $RELEASE_ENDPOINT = "https://api.github.com/repos/$REPO/releases/latest"
 $API_PORT = 8080
 $MIN_WINDOWS_BUILD = 19041  # Windows 10 20H2
